@@ -1,3 +1,13 @@
+"""
+Internship Utilities Script
+
+This script provides a set of utilities to interact with the GitHub repository containing the job postings
+
+Prerequisites:
+- PyGithub: A Python library to access the GitHub API v3.
+- Discord: A Python library to interact with the Discord API
+- A GitHub personal access token with the necessary permissions.
+"""
 import re
 from datetime import datetime
 import github
@@ -5,37 +15,57 @@ import discord
 import json
 import traceback
 
-class InternshipUtilities:
-    def __init__(self, repo: github.Repository.Repository, summer: bool, co_op: bool):
-        self.repo = repo
-        self.isSummer = summer 
-        self.isCoop = co_op
 
-    def binarySearchUS(self, state: str):
-        US_STATES = [
-            'AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI',
+class InternshipUtilities:
+    US_STATES = ['AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI',
             'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN',
             'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM', 'NV', 'NY', 'OH',
             'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA', 'VT', 'WA',
-            'WI', 'WV', 'WY'
-        ]
+            'WI', 'WV', 'WY']
+
+    def __init__(self, repo: github.Repository.Repository, summer: bool, co_op: bool):
+        self.repo = repo
+        self.isSummer = summer
+        self.isCoop = co_op
+
+    def binarySearchUS(self, state: str):
+        """
+        Determine if the state is within the US
+
+        Parameters:
+            - state: The acronym of the state
+        Returns:
+            - bool: True if the state is within the US, False otherwise
+        """
         low = 0
-        high = len(US_STATES) - 1
+        high = len(self.US_STATES) - 1
         while low <= high:
             mid = low + (high - low) // 2
-            if US_STATES[mid] == state:
+            if self.US_STATES[mid] == state:
                 return True
-            elif US_STATES[mid] > state:
+            elif self.US_STATES[mid] > state:
                 high = mid - 1
             else:
                 low = mid + 1
         return False
-    
-    def getLinks(self):
+
+    def getLinks(self) -> dict:
+        """
+        Retrieve all the saved information for the bot
+
+        Returns:
+            - dict: The saved information
+        """
         with open("./commits/repository_links_commits.json") as file:
             return json.load(file)
 
-    async def getSummerInternships(self, channel : discord.TextChannel):
+    async def getSummerInternships(self, channel: discord.TextChannel):
+        """
+        Retrieve the summer internships from the GitHub repository
+
+        Parameters:
+            - channel: The discord channel to send the job postings
+        """
         try:
             current_month = datetime.now().strftime("%B")[:3]
             current_day = datetime.now().strftime("%d")
@@ -129,7 +159,7 @@ class InternshipUtilities:
                         f"\n"
                     )
                     await channel.send(string)
-            
+
                 # Save the updated data
                 with open("./commits/repository_links_commits.json", "w") as file:
                     json.dump(data, file)
@@ -137,8 +167,13 @@ class InternshipUtilities:
             traceback.print_exc()
             raise e
 
+        async def getCoopInternships(self, channel: discord.TextChannel):
+            """
+            Retrieve the Co-op internships from the GitHub repository
 
-        async def getCoopInternships(self, channel : discord.TextChannel):
+            Parameters:
+                - channel: The discord channel to send the job postings
+            """
             try:
                 current_month = datetime.now().strftime("%B")[:3]
                 current_day = datetime.now().strftime("%d")
@@ -157,7 +192,9 @@ class InternshipUtilities:
                     for job in job_postings:
                         # Grab the data and remove the empty elements
                         non_empty_elements = [
-                            element.strip() for element in job.split("|") if element.strip()
+                            element.strip()
+                            for element in job.split("|")
+                            if element.strip()
                         ]
 
                         # Make sure that the position is still open
@@ -230,7 +267,7 @@ class InternshipUtilities:
                             f"\n"
                         )
                         await channel.send(string)
-                        
+
                     # Save the updated data
                     with open("./commits/repository_links_commits.json", "w") as file:
                         json.dump(data, file)

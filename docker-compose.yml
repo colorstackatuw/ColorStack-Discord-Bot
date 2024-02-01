@@ -3,3 +3,7 @@ services:
   main:
     build: .
     container_name: mybot
+    environment:
+      - DISCORD_TOKEN 
+      - CHANNEL_ID
+      - GITHUB_TOKEN
