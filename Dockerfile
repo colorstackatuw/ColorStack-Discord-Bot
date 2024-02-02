@@ -18,4 +18,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 WORKDIR /app/src
 
 # Run DiscordBot.py when the container launches
-CMD ["python", "DiscordBot.py"]
+CMD ["python", "-u", "DiscordBot.py"]
