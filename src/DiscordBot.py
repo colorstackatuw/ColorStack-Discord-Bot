@@ -16,6 +16,7 @@ from GitHubUtilities import GitHubUtilities
 from InternshipUtilities import InternshipUtilities
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 import traceback
 
 load_dotenv()
@@ -51,14 +52,16 @@ async def scheduled_task():
             if internship_utilities.isCoop:
                 await internship_utilities.getCoopInternships(channel)
             github_utilitiles.setNewCommit(github_utilitiles.getLastCommit(repo))
+        else:
+            print("No new jobs! Time: ", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     except Exception as e:
+        traceback.print_exc()
         await channel.send(
             "There is a potential issue with the bot! Please check the logs."
         )
         await channel.send("Shutting myself down.....")
         await bot.close()
-        traceback.print_exc()
         print(e)
 
 

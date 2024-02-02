@@ -32,12 +32,12 @@ class GitHubUtilities:
         Parameters:
             - commit: The last commit information
         """
-        with open("./commits/repository_links_commits.json", "r") as file:
+        with open("../commits/repository_links_commits.json", "r") as file:
             data_json = json.load(file)
 
         data_json["last_commit"] = commit
 
-        with open("./commits/repository_links_commits.json", "w") as file:
+        with open("../commits/repository_links_commits.json", "w") as file:
             json.dump(data_json, file)
 
     def getLastCommit(self, repo: github.Repository.Repository) -> str:
@@ -59,7 +59,7 @@ class GitHubUtilities:
         Returns:
             - str: The last commit hexadecimal information
         """
-        with open("./commits/repository_links_commits.json") as file:
+        with open("../commits/repository_links_commits.json") as file:
             return json.load(file)["last_commit"]
 
     def isNewCommit(self, repo: github.Repository.Repository, last_commit: str) -> bool:
