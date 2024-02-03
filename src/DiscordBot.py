@@ -47,6 +47,7 @@ async def scheduled_task():
         internship_utilities = InternshipUtilities(repo, summer=True, co_op=True)
 
         if github_utilitiles.isNewCommit(repo, last_saved_commit):
+            print("New commit has been found. Finding new jobs...")
             if internship_utilities.isSummer:
                 await internship_utilities.getSummerInternships(channel)
             if internship_utilities.isCoop:

@@ -12,9 +12,12 @@ Prerequisites:
 from github import Auth, Github
 import github
 import json
+from pathlib import Path
 
 
 class GitHubUtilities:
+    FILEPATH = Path("./commits/repository_links_commits.json")
+
     def __init__(self, token, repo_name="SimplifyJobs/Summer2024-Internships"):
         self.repo_name = repo_name
         self.github = Github(auth=Auth.Token(token))
@@ -32,12 +35,12 @@ class GitHubUtilities:
         Parameters:
             - commit: The last commit information
         """
-        with open("../commits/repository_links_commits.json", "r") as file:
+        with self.FILEPATH.open("r") as file:
             data_json = json.load(file)
 
         data_json["last_commit"] = commit
 
-        with open("../commits/repository_links_commits.json", "w") as file:
+        with self.FILEPATH.open("w") as file:
             json.dump(data_json, file)
 
     def getLastCommit(self, repo: github.Repository.Repository) -> str:
@@ -59,7 +62,7 @@ class GitHubUtilities:
         Returns:
             - str: The last commit hexadecimal information
         """
-        with open("../commits/repository_links_commits.json") as file:
+        with self.FILEPATH.open("r") as file:
             return json.load(file)["last_commit"]
 
     def isNewCommit(self, repo: github.Repository.Repository, last_commit: str) -> bool:

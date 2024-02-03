@@ -14,17 +14,20 @@ import github
 import discord
 import json
 import traceback
+from pathlib import Path
 
 
 class InternshipUtilities:
+    FILEPATH = Path("./commits/repository_links_commits.json")
     US_STATES = [
-        "AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", 
-        "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", 
-        "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", 
-        "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA", 
-        "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", 
+        "AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE",
+        "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA",
+        "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND",
+        "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",
+        "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI",
         "WV", "WY",
     ]
+    NOT_US = ["Canada", "UK", "United Kingdom"]
 
     def __init__(self, repo: github.Repository.Repository, summer: bool, co_op: bool):
         self.repo = repo
@@ -59,7 +62,7 @@ class InternshipUtilities:
         Returns:
             - dict: The saved information
         """
-        with open("../commits/repository_links_commits.json") as file:
+        with self.FILEPATH.open("r") as file:
             return json.load(file)
 
     async def getSummerInternships(self, channel: discord.TextChannel):
@@ -138,8 +141,14 @@ class InternshipUtilities:
                             match = re.search(r",\s*(.+)", location)
                             us_state = match.group(1) if match else None
 
-                            if not us_state or not self.binarySearchUS(us_state):
-                                continue
+                            # If the location has a US state, we need to check if it's valid
+                            # If its not in the US_STATES list, we need to verify if it's in US
+                            if match:
+                                if not us_state or not self.binarySearchUS(us_state):
+                                    continue
+                            else:
+                                if location in self.NOT_US:
+                                    continue
 
                     if "↳" not in non_empty_elements[0]:
                         match = re.search(r"\[([^\]]+)\]", non_empty_elements[0])
@@ -164,7 +173,7 @@ class InternshipUtilities:
                     await channel.send(string)
 
                 # Save the updated data
-                with open("../commits/repository_links_commits.json", "w") as file:
+                with self.FILEPATH.open("w") as file:
                     json.dump(data, file)
         except Exception as e:
             traceback.print_exc()
@@ -243,8 +252,14 @@ class InternshipUtilities:
                             match = re.search(r",\s*(.+)", location)
                             us_state = match.group(1) if match else None
 
-                            if not us_state or not self.binarySearchUS(us_state):
-                                continue
+                            # If the location has a US state, we need to check if it's valid
+                            # If its not in the US_STATES list, we need to verify if it's in US
+                            if match:
+                                if not us_state or not self.binarySearchUS(us_state):
+                                    continue
+                            else:
+                                if location in self.NOT_US:
+                                    continue
 
                     if "↳" not in non_empty_elements[0]:
                         match = re.search(r"\[([^\]]+)\]", non_empty_elements[0])
@@ -270,7 +285,7 @@ class InternshipUtilities:
                     await channel.send(string)
 
                 # Save the updated data
-                with open("../commits/repository_links_commits.json", "w") as file:
+                with self.FILEPATH.open("w") as file:
                     json.dump(data, file)
         except Exception as e:
             traceback.print_exc()
