@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 class InternshipUtilities:
-    FILEPATH = Path("./commits/repository_links_commits.json")
+    FILEPATH = Path("../commits/repository_links_commits.json")
     US_STATES = [
         "AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE",
         "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA",

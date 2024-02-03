@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 class GitHubUtilities:
-    FILEPATH = Path("./commits/repository_links_commits.json")
+    FILEPATH = Path("../commits/repository_links_commits.json")
 
     def __init__(self, token, repo_name="SimplifyJobs/Summer2024-Internships"):
         self.repo_name = repo_name
