@@ -21,7 +21,7 @@ import traceback
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
+CHANNEL_ID = "1203582614884188160" # os.getenv("CHANNEL_ID")
 GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
 intents = discord.Intents.default()
@@ -31,28 +31,32 @@ bot = commands.Bot(command_prefix="$", intents=intents)
 
 
 @tasks.loop(seconds=60)
-async def scheduled_task():
+async def scheduled_task(github_utilitiles: GitHubUtilities, internship_utilities: InternshipUtilities):
     """
     A scheduled task that runs every 60 seconds to check for new commits in the GitHub repository
+
+    Parameters:
+        - github_utilitiles: An instance of the GitHubUtilities class
+        - internship_utilities: An instance of the InternshipUtilities class
     """
     try:
-        channel = bot.get_channel(int(CHANNEL_ID))  # Replace with your channel ID
-        github_utilitiles = GitHubUtilities(
-            token=GITHUB_TOKEN,
-            repo_name="SimplifyJobs/Summer2024-Internships",
-        )
+        current_date = datetime.now()
+        channel = bot.get_channel(int(CHANNEL_ID))  
         repo = github_utilitiles.createGitHubConnection()
         last_saved_commit = github_utilitiles.getCommitLinks()
 
-        internship_utilities = InternshipUtilities(repo, summer=True, co_op=True)
-
         if github_utilitiles.isNewCommit(repo, last_saved_commit):
             print("New commit has been found. Finding new jobs...")
+            past_weeks = github_utilitiles.getPastWeekChanges(current_date)
+            
             if internship_utilities.isSummer:
-                await internship_utilities.getSummerInternships(channel)
+                job_postings = github_utilitiles.getCommitChanges(repo, "README.md")
+                await internship_utilities.getSummerInternships(channel, job_postings, past_weeks)
             if internship_utilities.isCoop:
-                await internship_utilities.getCoopInternships(channel)
+                job_postings = github_utilitiles.getCommitChanges(repo,"README-Off-Season.md")
+                await internship_utilities.getCoopInternships(channel, job_postings, past_weeks)
             github_utilitiles.setNewCommit(github_utilitiles.getLastCommit(repo))
+            print("All jobs have been posted!")
         else:
             print("No new jobs! Time: ", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -82,11 +86,15 @@ async def on_ready():
     print(f"Logged in as {bot.user.name}")
     channel = bot.get_channel(int(CHANNEL_ID))
     if channel:
-        await channel.send("Successfully joined the discord! Ready to provide jobs")
+        print("Successfully joined the discord! Ready to provide jobs")
     else:
         print(f"Could not find channel with ID {CHANNEL_ID}")
-    scheduled_task.start()  # Start the loop here
-
+    github_utilitiles = GitHubUtilities(
+            token=GITHUB_TOKEN,
+            repo_name="SimplifyJobs/Summer2024-Internships",
+    )
+    internship_utilities = InternshipUtilities(summer=True, co_op=True)
+    scheduled_task.start(github_utilitiles, internship_utilities)  # Start the loop here
 
 # Run the bot
 bot.run(DISCORD_TOKEN)

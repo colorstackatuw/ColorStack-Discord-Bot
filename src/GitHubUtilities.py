@@ -13,6 +13,7 @@ from github import Auth, Github
 import github
 import json
 from pathlib import Path
+from datetime import datetime, timedelta
 
 
 class GitHubUtilities:
@@ -76,3 +77,74 @@ class GitHubUtilities:
             - bool: True if there is a new commit, False otherwise
         """
         return last_commit != self.getLastCommit(repo)
+
+    def isWithinDateRange(
+        self, job_posting_date: str, past_week_dates: list[datetime]
+    ) -> bool:
+        """
+        Filter the commits based on the past week dates
+
+        Parameters:
+            - commits: The list of commits
+            - past_week_dates: The list of dates from the past week
+        Returns:
+            - bool: True if the job posting is within the past week, False otherwise
+        """
+        low = 0
+        high = len(past_week_dates) - 1
+        while low <= high:
+            mid = low + (high - low) // 2
+            if past_week_dates[mid] == job_posting_date:
+                return True
+            elif past_week_dates[mid] > job_posting_date:
+                high = mid - 1
+            else:
+                low = mid + 1
+        return False
+
+    def getPastWeekChanges(self, current_date: datetime) -> list[datetime]:
+        """
+        Retrieve the commits from the past week
+
+
+        Returns:
+            - list[str]: The list of commits from the past week
+        """
+        past_week_dates = []
+        for i in range(6, -1, -1):
+            date = current_date - timedelta(days=i)
+            past_week_dates.append(date)
+
+        return past_week_dates
+
+    def getCommitChanges(self, repo: github.Repository.Repository, readme_file: str) -> list[str]:
+        """
+        Retrieve the commit changes that make additions to the .md files
+
+        Parameters:
+            - repo: The GitHub repository
+        Returns:
+            - list[str]: The list of commit changes in the .md files
+        """
+        last_commit_sha = self.getLastCommit(repo)
+        if last_commit_sha == "":
+            return []
+
+        commit = repo.get_commit(sha="8e4960ba59491b379db1980d52cd49ab029afd6f")#sha=last_commit_sha)
+        previous_commit = commit.parents[0].sha  # Get the last commit before the current one
+        comparison = repo.compare(previous_commit, commit.sha)
+
+        commit_changes = []
+        for file in comparison.files:
+            if file.filename == readme_file:
+                commit_lines = file.patch.split("\n") if file.patch else []
+                for line in commit_lines:
+                    # Check if the line is an addition and not a file header or subtraction
+                    if (
+                        line.startswith("+")
+                        and not line.startswith("+++")
+                        and "🔒" not in line
+                    ):
+                        commit_changes.append(line)
+
+        return commit_changes
