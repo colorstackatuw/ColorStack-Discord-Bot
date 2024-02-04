@@ -21,7 +21,7 @@ import traceback
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = "1203582614884188160" # os.getenv("CHANNEL_ID")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
 intents = discord.Intents.default()
