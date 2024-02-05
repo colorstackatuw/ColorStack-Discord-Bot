@@ -130,7 +130,7 @@ class GitHubUtilities:
         if last_commit_sha == "":
             return []
 
-        commit = repo.get_commit(sha="8e4960ba59491b379db1980d52cd49ab029afd6f")#sha=last_commit_sha)
+        commit = repo.get_commit(sha=last_commit_sha)
         previous_commit = commit.parents[0].sha  # Get the last commit before the current one
         comparison = repo.compare(previous_commit, commit.sha)
 
