@@ -29,7 +29,6 @@ intents.messages = True  # Track messages
 intents.message_content = True  # Track message content
 bot = commands.Bot(command_prefix="$", intents=intents)
 
-
 @tasks.loop(seconds=60)
 async def scheduled_task(github_utilitiles: GitHubUtilities, internship_utilities: InternshipUtilities):
     """
@@ -43,18 +42,17 @@ async def scheduled_task(github_utilitiles: GitHubUtilities, internship_utilitie
         current_date = datetime.now()
         channel = bot.get_channel(int(CHANNEL_ID))  
         repo = github_utilitiles.createGitHubConnection()
-        last_saved_commit = github_utilitiles.getCommitLinks()
+        last_saved_commit = github_utilitiles.getSavedSha(repo)
 
         if github_utilitiles.isNewCommit(repo, last_saved_commit):
             print("New commit has been found. Finding new jobs...")
-            past_weeks = github_utilitiles.getPastWeekChanges(current_date)
             
             if internship_utilities.isSummer:
                 job_postings = github_utilitiles.getCommitChanges(repo, "README.md")
-                await internship_utilities.getSummerInternships(channel, job_postings, past_weeks)
+                await internship_utilities.getInternships(channel, job_postings, current_date, True)
             if internship_utilities.isCoop:
-                job_postings = github_utilitiles.getCommitChanges(repo,"README-Off-Season.md")
-                await internship_utilities.getCoopInternships(channel, job_postings, past_weeks)
+                 job_postings = github_utilitiles.getCommitChanges(repo,"README-Off-Season.md")
+                 await internship_utilities.getInternships(channel, job_postings, current_date, False)
             github_utilitiles.setNewCommit(github_utilitiles.getLastCommit(repo))
             print("All jobs have been posted!")
         else:
@@ -62,13 +60,12 @@ async def scheduled_task(github_utilitiles: GitHubUtilities, internship_utilitie
 
     except Exception as e:
         traceback.print_exc()
-        await channel.send(
-            "There is a potential issue with the bot! Please check the logs."
-        )
-        await channel.send("Shutting myself down.....")
-        await bot.close()
+        # await channel.send(
+        #     "There is a potential issue with the bot! Please check the logs."
+        # )
+        # await channel.send("Shutting myself down.....")
+        # await bot.close()
         print(e)
-
 
 @scheduled_task.before_loop
 async def before_scheduled_task():

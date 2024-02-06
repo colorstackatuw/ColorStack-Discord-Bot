@@ -9,10 +9,10 @@ Prerequisites:
 - A GitHub personal access token with the necessary permissions.
 """
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 import discord
-import json
 import traceback
+from collections.abc import Iterable
 from pathlib import Path
 
 
@@ -53,235 +53,125 @@ class InternshipUtilities:
                 low = mid + 1
         return False
 
-    def isWithinDateRange(self, job_posting_date: str, past_week_dates: list[str]) -> bool:
+    def isWithinDateRange(self, job_date: datetime, current_date: datetime) -> bool:
         """
-        Filter the commits based on the past week dates
+        Determine if the job posting is within the past week
 
         Parameters:
-            - commits: The list of commits
-            - past_week_dates: The list of dates from the past week
+            - job_date: The date of the job posting
+            - current_date: The current date
         Returns:
             - bool: True if the job posting is within the past week, False otherwise
         """
-        low = 0
-        high = len(past_week_dates) - 1
-        while low <= high:
-            mid = low + (high - low) // 2
-            if past_week_dates[mid].date() == job_posting_date.date():
-                return True
-            elif past_week_dates[mid].date() > job_posting_date.date():
-                high = mid - 1
-            else:
-                low = mid + 1
-        return False
+        return timedelta(days=0) <= current_date - job_date <= timedelta(days=7)
 
-    def getLinks(self) -> dict:
-        """
-        Retrieve all the saved information for the bot
-
-        Returns:
-            - dict: The saved information
-        """
-        with self.FILEPATH.open("r") as file:
-            return json.load(file)
-
-    async def getSummerInternships(
+    async def getInternships(
         self,
         channel: discord.TextChannel,
-        job_postings: str,
-        past_week_dates: list[datetime],
+        job_postings: Iterable[str],
+        current_date: datetime,
+        isSummer: bool
     ):
         """
-        Retrieve the summer internships from the GitHub repository
+        Retrieve the Summer or Co-op internships from the GitHub repository
 
         Parameters:
             - channel: The discord channel to send the job postings
             - job_postings: The list of job postings
-            - past_week_dates: The list of dates from the past week compared to current date
+            - current_date: The current date
+            - isSummer: A boolean to record a job if it's summer or co-op internships
+            - numDays: The number of days to check for job postings. Mainly used for when crashes occur in oracle cloud
         """
         try:
-            if len(job_postings) >= 1:
-                for job in job_postings:
-                    # Grab the data and remove the empty elements
-                    non_empty_elements = [
-                        element.strip() for element in job.split("|") if element.strip()
-                    ]
+            for job in job_postings:
+                # Determine the index of the job link
+                job_link_index = 4 if isSummer else 5
 
-                    # Verify that job posting date was within past week
-                    date_posted = non_empty_elements[-1]
-                    current_year = datetime.now().year
-                    search_date = f"{date_posted} {current_year}"
-                    datetime_format = datetime.strptime(search_date, "%b %d %Y")
-                    if not self.isWithinDateRange(datetime_format, past_week_dates):
-                        continue
+                # Grab the data and remove the empty elements
+                non_empty_elements = [
+                    element.strip() for element in job.split("|") if element.strip()
+                ]
 
-                    # Make sure that the position is still open
-                    if "🔒" in non_empty_elements[3]:
-                        continue
-                    else:
-                        job_link = re.search(
-                            r'href="([^"]+)"', non_empty_elements[4]
-                        ).group(1)
-
-                    # We need to check that the position is within the US and not remote
-                    list_locations = []
-                    if "<details>" in non_empty_elements[3]:
-                        matches = re.findall(
-                            r"([A-Za-z\s]+),\s([A-Z]{2})|\bRemote\b",
-                            non_empty_elements[2],
-                        )
-                        for match in matches:
-                            if match[0]:
-                                city_state = ", ".join(match[:2])
-                                list_locations.append(city_state)
-                            else:
-                                list_locations.append("Remote")
-                    elif "</br>" in non_empty_elements[3]:
-                        list_locations = non_empty_elements[3].split("</br>")
-
-                    # If there are multiple locations, we need to populate the string correctly
-                    if len(list_locations) > 1:
-                        location = " | ".join(list_locations)
-                    else:
-                        is_remote = bool(
-                            re.search(r"(?i)\bremote\b", non_empty_elements[3])
-                        )
-                        location = "Remote" if is_remote else non_empty_elements[3]
-
-                        if location != "Remote":
-                            match = re.search(r",\s*(.+)", location)
-                            us_state = match.group(1) if match else None
-
-                            # If the location has a US state, we need to check if it's valid
-                            # If its not in the US_STATES list, we need to verify if it's in US
-                            if match:
-                                if not us_state or not self.binarySearchUS(us_state):
-                                    continue
-                            else:
-                                if location in self.NOT_US:
-                                    continue
-
-                    if "↳" not in non_empty_elements[1]:
-                        match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
-                        company_name = match.group(1) if match else "None"
-                        previous_job_title = company_name
-                    else:
-                        company_name = previous_job_title
-
-                    job_title = non_empty_elements[2]
-
-                    post = (
-                        f"**📅 Date Posted:** {date_posted}\n"
-                        f"**ℹ️ Company Name:** {company_name}\n"
-                        f"**👨‍💻 Job Title:** {job_title}\n"
-                        f"**📍 Location:** {location}\n"
-                        f"**➡️  When?:** Summer {current_year}\n"
-                        f"\n"
-                        f"**👉 Job Link:** {job_link}\n"
-                        f"\n"
+                # We need to check that the position is within the US and not remote
+                list_locations = []
+                if "<details>" in non_empty_elements[3]:
+                    matches = re.findall(
+                        r"([A-Za-z\s]+),\s([A-Z]{2})|\bRemote\b",
+                        non_empty_elements[2],
                     )
-                    await channel.send(post)
-        except Exception as e:
-            traceback.print_exc()
-            raise e
+                    for match in matches:
+                        if match[0]:
+                            city_state = ", ".join(match[:2])
+                            list_locations.append(city_state)
+                        else:
+                            list_locations.append("Remote")
+                elif "</br>" in non_empty_elements[3]:
+                    list_locations = non_empty_elements[3].split("</br>")
 
-    async def getCoopInternships(
-        self,
-        channel: discord.TextChannel,
-        job_postings: str,
-        past_week_dates: list[str],
-    ):
-        """
-        Retrieve the Co-op internships from the GitHub repository
+                # If there are multiple locations, we need to populate the string correctly
+                if len(list_locations) > 1:
+                    location = " | ".join(list_locations)
+                else:
+                    is_remote = bool(
+                        re.search(r"(?i)\bremote\b", non_empty_elements[3])
+                    )
+                    location = "Remote" if is_remote else non_empty_elements[3]
 
-        Parameters:
-            - channel: The discord channel to send the job postings
-            - job_postings: The list of job postings
-            - past_week_dates: The list of dates from the past week compared to current date
-        """
-        try:
-            if len(job_postings) >= 1:
-                for job in job_postings:
-                    # Grab the data and remove the empty elements
-                    non_empty_elements = [
-                        element.strip() for element in job.split("|") if element.strip()
-                    ]
+                    if location != "Remote":
+                        match = re.search(r",\s*(.+)", location)
+                        us_state = match.group(1) if match else None
 
-                    # Verify that job posting date was within past week
-                    date_posted = non_empty_elements[-1]
-                    current_year = datetime.now().year
-                    search_date = f"{date_posted} {current_year}"
-                    datetime_format = datetime.strptime(search_date, "%b %d %Y")
-                    if not self.isWithinDateRange(datetime_format, past_week_dates):
-                        continue
+                        # If the location has a US state, we need to check if it's valid
+                        # If its not in the US_STATES list, we need to verify if it's in US
+                        if not match or not self.binarySearchUS(us_state) or location in self.NOT_US:
 
-                    # Make sure that the position is still open
-                    if "🔒" in non_empty_elements[5]:
-                        continue
-                    else:
-                        job_link = re.search(
-                            r'href="([^"]+)"', non_empty_elements[5]
-                        ).group(1)
+                            # Save the previous_job_title in case a "↳" is in US while root is not
+                            if "↳" not in non_empty_elements[1]:
+                                match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
+                                company_name = match.group(1) if match else "None"
+                                previous_job_title = company_name
 
-                    # We need to check that the position is within the US and not remote
-                    list_locations = []
-                    if "<details>" in non_empty_elements[3]:
-                        matches = re.findall(
-                            r"([A-Za-z\s]+),\s([A-Z]{2})|\bRemote\b",
-                            non_empty_elements[2],
-                        )
-                        for match in matches:
-                            if match[0]:
-                                city_state = ", ".join(match[:2])
-                                list_locations.append(city_state)
-                            else:
-                                list_locations.append("Remote")
-                    elif "</br>" in non_empty_elements[3]:
-                        list_locations = non_empty_elements[3].split("</br>")
+                            continue
 
-                    # If there are multiple locations, we need to populate the string correctly
-                    if len(list_locations) > 1:
-                        location = " | ".join(list_locations)
-                    else:
-                        is_remote = bool(
-                            re.search(r"(?i)\bremote\b", non_empty_elements[3])
-                        )
-                        location = "Remote" if is_remote else non_empty_elements[3]
+                # If the company name is not present, we need to use the previous company name
+                if "↳" not in non_empty_elements[1]:
+                    match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
+                    company_name = match.group(1) if match else "None"
+                    previous_job_title = company_name
+                else:
+                    company_name = previous_job_title
 
-                        if location != "Remote":
-                            match = re.search(r",\s*(.+)", location)
-                            us_state = match.group(1) if match else None
+                # Verify that job posting date was within past week
+                date_posted = non_empty_elements[-1]
+                current_year = datetime.now().year
+                search_date = f"{date_posted} {current_year}"
+                job_date = datetime.strptime(search_date, "%b %d %Y")
+                if not self.isWithinDateRange(job_date, current_date):
+                    continue
 
-                            # If the location has a US state, we need to check if it's valid
-                            # If its not in the US_STATES list, we need to verify if it's in US
-                            if match:
-                                if not us_state or not self.binarySearchUS(us_state):
-                                    continue
-                            else:
-                                if location in self.NOT_US:
-                                    continue
+                job_link = re.search(
+                    r'href="([^"]+)"', non_empty_elements[job_link_index]
+                ).group(1)
 
-                    if "↳" not in non_empty_elements[1]:
-                        match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
-                        company_name = match.group(1) if match else "None"
-                        previous_job_title = company_name
-                    else:
-                        company_name = previous_job_title
+                job_title = non_empty_elements[2]
 
-                    job_title = non_empty_elements[2]
+                if isSummer:
+                    terms = "Summer" + " " + str(current_year)
+                else:
                     terms = " |".join(non_empty_elements[4].split(","))
 
-                    post = (
-                        f"**📅 Date Posted:** {date_posted}\n"
-                        f"**ℹ️ Company Name:** {company_name}\n"
-                        f"**👨‍💻 Job Title:** {job_title}\n"
-                        f"**📍 Location:** {location}\n"
-                        f"**➡️  When?:**  {terms}\n"
-                        f"\n"
-                        f"**👉 Job Link:** {job_link}\n"
-                        f"\n"
-                    )
-                    await channel.send(post)
+                post = (
+                    f"**📅 Date Posted:** {date_posted}\n"
+                    f"**ℹ️ Company Name:** {company_name}\n"
+                    f"**👨‍💻 Job Title:** {job_title}\n"
+                    f"**📍 Location:** {location}\n"
+                    f"**➡️  When?:**  {terms}\n"
+                    f"\n"
+                    f"**👉 Job Link:** {job_link}\n"
+                    f"\n"
+                )
+                print(post)
+                # await channel.send(post) #TODO: CHANGE THIS BACK TO SEND MESSAGE
 
         except Exception as e:
             traceback.print_exc()

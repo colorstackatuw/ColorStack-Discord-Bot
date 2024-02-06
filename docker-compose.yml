@@ -8,3 +8,5 @@ services:
       - DISCORD_TOKEN 
       - CHANNEL_ID
       - GIT_TOKEN
+    volumes:
+      - ./commits:/app/commits

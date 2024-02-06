@@ -12,8 +12,8 @@ Prerequisites:
 from github import Auth, Github
 import github
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from datetime import datetime, timedelta
 
 
 class GitHubUtilities:
@@ -39,7 +39,7 @@ class GitHubUtilities:
         with self.FILEPATH.open("r") as file:
             data_json = json.load(file)
 
-        data_json["last_commit"] = commit
+        data_json["last_saved_sha"] = commit
 
         with self.FILEPATH.open("w") as file:
             json.dump(data_json, file)
@@ -56,15 +56,26 @@ class GitHubUtilities:
         branch = repo.get_branches()[0]  # May need to be changed in future
         return branch.commit.sha
 
-    def getCommitLinks(self) -> str:
+    def getSavedSha(self, repo: github.Repository.Repository) -> str:
         """
         Retrieve the last commit information from the saved file
+
+        Parameters:
+            - repo: The GitHub repository
 
         Returns:
             - str: The last commit hexadecimal information
         """
         with self.FILEPATH.open("r") as file:
-            return json.load(file)["last_commit"]
+            commit_sha = json.load(file)["last_saved_sha"]
+
+        if commit_sha == "":
+            # If the file is empty, get the previous commit from the repository
+            last_commit_sha = self.getLastCommit(repo)
+            previous_commit = repo.get_commit(sha=last_commit_sha)
+            return previous_commit.parents[0].sha
+        else:
+            return commit_sha
 
     def isNewCommit(self, repo: github.Repository.Repository, last_commit: str) -> bool:
         """
@@ -78,63 +89,25 @@ class GitHubUtilities:
         """
         return last_commit != self.getLastCommit(repo)
 
-    def isWithinDateRange(
-        self, job_posting_date: str, past_week_dates: list[datetime]
-    ) -> bool:
-        """
-        Filter the commits based on the past week dates
-
-        Parameters:
-            - commits: The list of commits
-            - past_week_dates: The list of dates from the past week
-        Returns:
-            - bool: True if the job posting is within the past week, False otherwise
-        """
-        low = 0
-        high = len(past_week_dates) - 1
-        while low <= high:
-            mid = low + (high - low) // 2
-            if past_week_dates[mid] == job_posting_date:
-                return True
-            elif past_week_dates[mid] > job_posting_date:
-                high = mid - 1
-            else:
-                low = mid + 1
-        return False
-
-    def getPastWeekChanges(self, current_date: datetime) -> list[datetime]:
-        """
-        Retrieve the commits from the past week
-
-
-        Returns:
-            - list[str]: The list of commits from the past week
-        """
-        past_week_dates = []
-        for i in range(6, -1, -1):
-            date = current_date - timedelta(days=i)
-            past_week_dates.append(date)
-
-        return past_week_dates
-
-    def getCommitChanges(self, repo: github.Repository.Repository, readme_file: str) -> list[str]:
+    def getCommitChanges(
+        self, repo: github.Repository.Repository, readme_file: str
+    ) -> Iterable[str]:
         """
         Retrieve the commit changes that make additions to the .md files
 
         Parameters:
             - repo: The GitHub repository
         Returns:
-            - list[str]: The list of commit changes in the .md files
+            - Iterable[str]: The lines that contain the job postings
         """
         last_commit_sha = self.getLastCommit(repo)
         if last_commit_sha == "":
             return []
 
         commit = repo.get_commit(sha=last_commit_sha)
-        previous_commit = commit.parents[0].sha  # Get the last commit before the current one
+        previous_commit = self.getSavedSha(repo)  # Get the saved commit
         comparison = repo.compare(previous_commit, commit.sha)
 
-        commit_changes = []
         for file in comparison.files:
             if file.filename == readme_file:
                 commit_lines = file.patch.split("\n") if file.patch else []
@@ -145,6 +118,4 @@ class GitHubUtilities:
                         and not line.startswith("+++")
                         and "🔒" not in line
                     ):
-                        commit_changes.append(line)
-
-        return commit_changes
+                        yield line
