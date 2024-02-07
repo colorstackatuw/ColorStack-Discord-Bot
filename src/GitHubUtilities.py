@@ -69,10 +69,10 @@ class GitHubUtilities:
         with self.FILEPATH.open("r") as file:
             commit_sha = json.load(file)["last_saved_sha"]
 
-        if commit_sha == "":
+        if not commit_sha:
             # If the file is empty, get the previous commit from the repository
-            last_commit_sha = self.getLastCommit(repo)
-            previous_commit = repo.get_commit(sha=last_commit_sha)
+            recent_commit_sha = self.getLastCommit(repo)
+            previous_commit = repo.get_commit(sha=recent_commit_sha)
             return previous_commit.parents[0].sha
         else:
             return commit_sha
@@ -100,13 +100,12 @@ class GitHubUtilities:
         Returns:
             - Iterable[str]: The lines that contain the job postings
         """
-        last_commit_sha = self.getLastCommit(repo)
-        if last_commit_sha == "":
+        recent_commit = self.getLastCommit(repo)
+        if not recent_commit:
             return []
 
-        commit = repo.get_commit(sha=last_commit_sha)
         previous_commit = self.getSavedSha(repo)  # Get the saved commit
-        comparison = repo.compare(previous_commit, commit.sha)
+        comparison = repo.compare(base=previous_commit, head=recent_commit)
 
         for file in comparison.files:
             if file.filename == readme_file:

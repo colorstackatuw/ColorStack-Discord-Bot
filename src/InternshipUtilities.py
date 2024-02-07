@@ -18,40 +18,12 @@ from pathlib import Path
 
 class InternshipUtilities:
     FILEPATH = Path("../commits/repository_links_commits.json")
-    US_STATES = [
-        "AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE",
-        "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA",
-        "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND",
-        "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",
-        "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI",
-        "WV", "WY",
-    ]
-    NOT_US = ["Canada", "UK", "United Kingdom"]
+    NOT_US = ["Canada", "UK", "United Kingdom", "EU"]
 
     def __init__(self, summer: bool, co_op: bool):
         self.isSummer = summer
         self.isCoop = co_op
-
-    def binarySearchUS(self, state: str):
-        """
-        Determine if the state is within the US
-
-        Parameters:
-            - state: The acronym of the state
-        Returns:
-            - bool: True if the state is within the US, False otherwise
-        """
-        low = 0
-        high = len(self.US_STATES) - 1
-        while low <= high:
-            mid = low + (high - low) // 2
-            if self.US_STATES[mid] == state:
-                return True
-            elif self.US_STATES[mid] > state:
-                high = mid - 1
-            else:
-                low = mid + 1
-        return False
+        self.previousJobTitle = ""
 
     def isWithinDateRange(self, job_date: datetime, current_date: datetime) -> bool:
         """
@@ -65,12 +37,24 @@ class InternshipUtilities:
         """
         return timedelta(days=0) <= current_date - job_date <= timedelta(days=7)
 
+    def saveCompanyName(self, job_title: str) -> None:
+        """
+        Save the previous job title into the class variable
+
+        Parameters:
+            - job_title: The job title
+        """
+        if "↳" not in job_title:
+            match = re.search(r"\[([^\]]+)\]", job_title)
+            company_name = match.group(1) if match else "None"
+            self.previous_job_title = company_name
+
     async def getInternships(
         self,
         channel: discord.TextChannel,
         job_postings: Iterable[str],
         current_date: datetime,
-        isSummer: bool
+        isSummer: bool,
     ):
         """
         Retrieve the Summer or Co-op internships from the GitHub repository
@@ -92,54 +76,13 @@ class InternshipUtilities:
                     element.strip() for element in job.split("|") if element.strip()
                 ]
 
-                # We need to check that the position is within the US and not remote
-                list_locations = []
-                if "<details>" in non_empty_elements[3]:
-                    matches = re.findall(
-                        r"([A-Za-z\s]+),\s([A-Z]{2})|\bRemote\b",
-                        non_empty_elements[2],
-                    )
-                    for match in matches:
-                        if match[0]:
-                            city_state = ", ".join(match[:2])
-                            list_locations.append(city_state)
-                        else:
-                            list_locations.append("Remote")
-                elif "</br>" in non_empty_elements[3]:
-                    list_locations = non_empty_elements[3].split("</br>")
-
-                # If there are multiple locations, we need to populate the string correctly
-                if len(list_locations) > 1:
-                    location = " | ".join(list_locations)
-                else:
-                    is_remote = bool(
-                        re.search(r"(?i)\bremote\b", non_empty_elements[3])
-                    )
-                    location = "Remote" if is_remote else non_empty_elements[3]
-
-                    if location != "Remote":
-                        match = re.search(r",\s*(.+)", location)
-                        us_state = match.group(1) if match else None
-
-                        # If the location has a US state, we need to check if it's valid
-                        # If its not in the US_STATES list, we need to verify if it's in US
-                        if not match or not self.binarySearchUS(us_state) or location in self.NOT_US:
-
-                            # Save the previous_job_title in case a "↳" is in US while root is not
-                            if "↳" not in non_empty_elements[1]:
-                                match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
-                                company_name = match.group(1) if match else "None"
-                                previous_job_title = company_name
-
-                            continue
-
                 # If the company name is not present, we need to use the previous company name
                 if "↳" not in non_empty_elements[1]:
                     match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
                     company_name = match.group(1) if match else "None"
-                    previous_job_title = company_name
+                    self.previous_job_title = company_name
                 else:
-                    company_name = previous_job_title
+                    company_name = self.previous_job_title
 
                 # Verify that job posting date was within past week
                 date_posted = non_empty_elements[-1]
@@ -147,6 +90,53 @@ class InternshipUtilities:
                 search_date = f"{date_posted} {current_year}"
                 job_date = datetime.strptime(search_date, "%b %d %Y")
                 if not self.isWithinDateRange(job_date, current_date):
+                    # Save the previous_job_title in case a "↳" is in US while root is not
+                    self.saveCompanyName(company_name)
+                    continue
+
+                # We need to check that the position is within the US or remote
+                list_locations = []
+                location_html = non_empty_elements[3]
+                if "<details>" in location_html:
+                    locations_content = re.search(
+                        r"(?<=</summary>)(.*?)(?=</details>)",
+                        location_html,
+                        flags=re.DOTALL,
+                    ).group(1)
+                    for location in locations_content.split("</br>"):
+                        location = location.strip()
+                        if location and not any(
+                            not_us_country in location for not_us_country in self.NOT_US
+                        ):
+                            list_locations.append(location)
+
+                elif "</br>" in location_html:
+                    split_locations = location_html.split("</br>")
+                    for location in split_locations:
+                        if not any(
+                            not_us_country in location for not_us_country in self.NOT_US
+                        ):
+                            list_locations.append(location)
+                elif location_html:
+                    location = (
+                        "Remote"
+                        if re.search(r"(?i)\bremote\b", location_html)
+                        else location_html
+                    )
+                    is_outside_us = any(
+                        not_us_country in location for not_us_country in self.NOT_US
+                    )
+
+                    if location == "Remote" or not is_outside_us:
+                        list_locations.append(location)
+                    else:
+                        self.saveCompanyName(company_name)
+                        continue
+
+                if len(list_locations) >= 1:
+                    location = " | ".join(list_locations)
+                else:
+                    self.saveCompanyName(company_name)
                     continue
 
                 job_link = re.search(

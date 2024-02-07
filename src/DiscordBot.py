@@ -74,7 +74,6 @@ async def before_scheduled_task():
     """
     await bot.wait_until_ready()
 
-
 @bot.event
 async def on_ready():
     """
