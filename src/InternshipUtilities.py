@@ -160,8 +160,7 @@ class InternshipUtilities:
                     f"**👉 Job Link:** {job_link}\n"
                     f"\n"
                 )
-                print(post)
-                # await channel.send(post) #TODO: CHANGE THIS BACK TO SEND MESSAGE
+                await channel.send(post) 
 
         except Exception as e:
             traceback.print_exc()
