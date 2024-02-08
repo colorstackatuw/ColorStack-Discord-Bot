@@ -8,8 +8,8 @@ from src.GitHubUtilities import GitHubUtilities
 
 @patch('github.Github')
 def test_create_github_connection(mock_github):
-    token = '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'
-    repo_name = 'SimplifyJobs/Summer2024-Internships'
+    token = "token"
+    repo_name = "SimplifyJobs/Summer2024-Internships"
     utilities = GitHubUtilities(token, repo_name)
     repo = utilities.createGitHubConnection()
     assert repo.owner.login == "SimplifyJobs" 

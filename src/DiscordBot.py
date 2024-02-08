@@ -61,9 +61,8 @@ async def scheduled_task(github_utilitiles: GitHubUtilities, internship_utilitie
     except Exception as e:
         traceback.print_exc()
         await channel.send(
-            "There is a potential issue with the bot! Please check the logs."
+            "There is a potential issue with the bot! Please check the logs. Shutting down the bot..."
         )
-        await channel.send("Shutting myself down.....")
         await bot.close()
         print(e)
 

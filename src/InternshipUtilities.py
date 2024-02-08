@@ -37,17 +37,14 @@ class InternshipUtilities:
         """
         return timedelta(days=0) <= current_date - job_date <= timedelta(days=7)
 
-    def saveCompanyName(self, job_title: str) -> None:
+    def saveCompanyName(self, company_name: str) -> None:
         """
         Save the previous job title into the class variable
 
         Parameters:
-            - job_title: The job title
+            - company_name: The company name
         """
-        if "↳" not in job_title:
-            match = re.search(r"\[([^\]]+)\]", job_title)
-            company_name = match.group(1) if match else "None"
-            self.previous_job_title = company_name
+        self.previous_job_title = company_name
 
     async def getInternships(
         self,
@@ -64,7 +61,6 @@ class InternshipUtilities:
             - job_postings: The list of job postings
             - current_date: The current date
             - isSummer: A boolean to record a job if it's summer or co-op internships
-            - numDays: The number of days to check for job postings. Mainly used for when crashes occur in oracle cloud
         """
         try:
             for job in job_postings:
@@ -80,7 +76,7 @@ class InternshipUtilities:
                 if "↳" not in non_empty_elements[1]:
                     match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
                     company_name = match.group(1) if match else "None"
-                    self.previous_job_title = company_name
+                    self.saveCompanyName(company_name)
                 else:
                     company_name = self.previous_job_title
 

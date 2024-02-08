@@ -62,7 +62,6 @@ class GitHubUtilities:
 
         Parameters:
             - repo: The GitHub repository
-
         Returns:
             - str: The last commit hexadecimal information
         """
@@ -97,6 +96,7 @@ class GitHubUtilities:
 
         Parameters:
             - repo: The GitHub repository
+            - readme_file: The name of the .md file
         Returns:
             - Iterable[str]: The lines that contain the job postings
         """
