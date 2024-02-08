@@ -75,7 +75,9 @@ class InternshipUtilities:
                 # If the company name is not present, we need to use the previous company name
                 if "↳" not in non_empty_elements[1]:
                     match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
-                    company_name = match.group(1) if match else "None"
+
+                    # If the company doesn't have link embedded, we just use the company name
+                    company_name = match.group(1) if match else non_empty_elements[1]
                     self.saveCompanyName(company_name)
                 else:
                     company_name = self.previous_job_title
@@ -156,7 +158,7 @@ class InternshipUtilities:
                     f"**👉 Job Link:** {job_link}\n"
                     f"\n"
                 )
-                await channel.send(post) 
+                await channel.send(post)
 
         except Exception as e:
             traceback.print_exc()
