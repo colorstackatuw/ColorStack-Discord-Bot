@@ -17,15 +17,19 @@ from pathlib import Path
 
 
 class GitHubUtilities:
-    FILEPATH = Path("../commits/repository_links_commits.json")
+    FILEPATH = Path("../commits/repository_links_commits.json")  
 
-    def __init__(self, token, repo_name="SimplifyJobs/Summer2024-Internships"):
+    def __init__(self, token, repo_name):
         self.repo_name = repo_name
         self.github = Github(auth=Auth.Token(token))
+        self.comparison = None
 
     def createGitHubConnection(self):
         """
         Create a connection to the specified GitHub repository
+
+        Returns:
+            - github.Repository.Repository: The GitHub repository
         """
         return self.github.get_repo(self.repo_name)
 
@@ -76,6 +80,27 @@ class GitHubUtilities:
         else:
             return commit_sha
 
+    def setComparison(self, repo: github.Repository.Repository) -> None:
+        """
+        Set the comparison between the previous commit and the recent commit
+
+        Parameters:
+            - repo: The GitHub repository
+        """
+        recent_commit = self.getLastCommit(repo)
+        if not recent_commit:
+            self.comparison = None
+
+        previous_commit = self.getSavedSha(repo)  # Get the saved commit
+        comparison = repo.compare(base=previous_commit, head=recent_commit)
+        self.comparison = comparison
+
+    def clearComparison(self) -> None:
+        """
+        Clear the comparison between the previous commit and the recent commit
+        """
+        self.comparison = None
+
     def isNewCommit(self, repo: github.Repository.Repository, last_commit: str) -> bool:
         """
         Determine if there is a new commit on the GitHub repository
@@ -88,9 +113,7 @@ class GitHubUtilities:
         """
         return last_commit != self.getLastCommit(repo)
 
-    def getCommitChanges(
-        self, repo: github.Repository.Repository, readme_file: str
-    ) -> Iterable[str]:
+    def getCommitChanges(self, readme_file: str) -> Iterable[str]:
         """
         Retrieve the commit changes that make additions to the .md files
 
@@ -100,14 +123,10 @@ class GitHubUtilities:
         Returns:
             - Iterable[str]: The lines that contain the job postings
         """
-        recent_commit = self.getLastCommit(repo)
-        if not recent_commit:
+        if self.comparison is None:
             return []
 
-        previous_commit = self.getSavedSha(repo)  # Get the saved commit
-        comparison = repo.compare(base=previous_commit, head=recent_commit)
-
-        for file in comparison.files:
+        for file in self.comparison.files:
             if file.filename == readme_file:
                 commit_lines = file.patch.split("\n") if file.patch else []
                 for line in commit_lines:

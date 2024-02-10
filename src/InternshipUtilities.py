@@ -17,13 +17,27 @@ from pathlib import Path
 
 
 class InternshipUtilities:
-    FILEPATH = Path("../commits/repository_links_commits.json")
+    FILEPATH = Path("../commits/repository_links_commits.json") 
     NOT_US = ["Canada", "UK", "United Kingdom", "EU"]
 
-    def __init__(self, summer: bool, co_op: bool):
-        self.isSummer = summer
-        self.isCoop = co_op
-        self.previousJobTitle = ""
+    def __init__(self, summer: bool, coop: bool):
+        self.is_summer = summer
+        self.is_coop = coop
+        self.previous_job_title = ""
+        self.coop_job_links = dict()
+        self.total_jobs = 0
+
+    def clearJobLinks(self) -> None:
+        """
+        Clear the Co-Op dictionary links
+        """
+        self.coop_job_links = dict()
+    
+    def clearJobCounter(self) -> None:
+        """
+        Clear the job counter
+        """
+        self.total_jobs = 0
 
     def isWithinDateRange(self, job_date: datetime, current_date: datetime) -> bool:
         """
@@ -51,7 +65,7 @@ class InternshipUtilities:
         channel: discord.TextChannel,
         job_postings: Iterable[str],
         current_date: datetime,
-        isSummer: bool,
+        is_summer: bool,
     ):
         """
         Retrieve the Summer or Co-op internships from the GitHub repository
@@ -60,12 +74,12 @@ class InternshipUtilities:
             - channel: The discord channel to send the job postings
             - job_postings: The list of job postings
             - current_date: The current date
-            - isSummer: A boolean to record a job if it's summer or co-op internships
+            - is_summer: A boolean to record a job if it's summer or co-op internships
         """
         try:
             for job in job_postings:
                 # Determine the index of the job link
-                job_link_index = 4 if isSummer else 5
+                job_link_index = 4 if is_summer else 5
 
                 # Grab the data and remove the empty elements
                 non_empty_elements = [
@@ -143,21 +157,27 @@ class InternshipUtilities:
 
                 job_title = non_empty_elements[2]
 
-                if isSummer:
+                if is_summer:
                     terms = "Summer" + " " + str(current_year)
+
+                    # If the job link is already in the dictionary, we skip the job
+                    if job_link in self.coop_job_links:
+                        continue
                 else:
                     terms = " |".join(non_empty_elements[4].split(","))
+                    self.coop_job_links[job_link] = None  # Save the job link
 
                 post = (
                     f"**📅 Date Posted:** {date_posted}\n"
-                    f"**ℹ️ Company Name:** {company_name}\n"
+                    f"**ℹ️ Company:** {company_name}\n"
                     f"**👨‍💻 Job Title:** {job_title}\n"
                     f"**📍 Location:** {location}\n"
                     f"**➡️  When?:**  {terms}\n"
                     f"\n"
                     f"**👉 Job Link:** {job_link}\n"
-                    f"\n"
+                    f"\n\n\n"
                 )
+                self.total_jobs += 1
                 await channel.send(post)
 
         except Exception as e:
