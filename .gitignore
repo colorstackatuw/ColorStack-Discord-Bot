@@ -5,3 +5,6 @@ __pycache__/
 
 # VSCode directory
 .vscode/
+
+# Environment variables
+.env
