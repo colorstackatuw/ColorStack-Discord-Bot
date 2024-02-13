@@ -1,4 +1,4 @@
-# ColorStack-Bot
+# ColorStack-Discord-Bot
 
 This bot posts internships from public GitHub repositories. Below are the links to internship opportunities that [ColorStack at UW-Madison](https://colorstack.cs.wisc.edu/) uses.
 
