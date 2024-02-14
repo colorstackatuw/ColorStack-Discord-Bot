@@ -10,23 +10,42 @@ Prerequisites:
 - A Discord bot token with the necessary permissions.
 - A GitHub personal access token with the necessary permissions.
 """
-from discord.ext import tasks, commands
+import logging
+import os
+from datetime import datetime
+
 import discord
+from discord.ext import commands, tasks
+from dotenv import load_dotenv
 from GitHubUtilities import GitHubUtilities
 from InternshipUtilities import InternshipUtilities
-import os
-from dotenv import load_dotenv
-from datetime import datetime
-import traceback
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
+# Set up logging: log INFO+ levels to file, appending new entries, with detailed format.
+logging.basicConfig(
+    filename="/app/logs/discord_bot.log",
+    filemode="a",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+logging.basicConfig(
+    filename="/app/logs/discord_bot.log",
+    filemode="a",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+
 intents = discord.Intents.default()
-intents.messages = True  # Track messages
-intents.message_content = True  # Track message content
+intents.messages = True  # Enable message tracking
+intents.message_content = True  # Enable message content tracking
 bot = commands.Bot(command_prefix="$", intents=intents)
 
 
@@ -35,61 +54,59 @@ async def scheduled_task(
     github_utilities: GitHubUtilities, internship_utilities: InternshipUtilities
 ):
     """
-    A scheduled task that runs every 60 seconds to check for new commits in the GitHub repository
-
-    Parameters:
-        - github_utilities: An instance of the GitHubUtilities class
-        - internship_utilities: An instance of the InternshipUtilities class
+    A scheduled task that runs every 60 seconds to check for new commits in the GitHub repository.
     """
     try:
-        start_time = current_date = datetime.now()
+        start_time = datetime.now()
         channel = bot.get_channel(int(CHANNEL_ID))
         repo = github_utilities.createGitHubConnection()
         last_saved_commit = github_utilities.getSavedSha(repo)
 
         if github_utilities.isNewCommit(repo, last_saved_commit):
-            print("New commit has been found. Finding new jobs...")
+            logging.info("New commit has been found. Finding new jobs...")
             github_utilities.setComparison(repo)  # Get the comparison file
 
             if internship_utilities.is_coop:
                 job_postings = github_utilities.getCommitChanges("README-Off-Season.md")
                 await internship_utilities.getInternships(
-                    channel, job_postings, current_date, False
+                    channel, job_postings, start_time, False
                 )
             if internship_utilities.is_summer:
                 job_postings = github_utilities.getCommitChanges("README.md")
                 await internship_utilities.getInternships(
-                    channel, job_postings, current_date, True
+                    channel, job_postings, start_time, True
                 )
             github_utilities.setNewCommit(github_utilities.getLastCommit(repo))
-            print("There were", internship_utilities.total_jobs, " new jobs found!")
+            logging.info(
+                f"There were {internship_utilities.total_jobs} new jobs found!"
+            )
 
             # Clear all the cached data
             internship_utilities.clearJobLinks()
             internship_utilities.clearJobCounter()
             github_utilities.clearComparison()
 
-            print("All jobs have been posted!")
+            logging.info("All jobs have been posted!")
         else:
-            print("No new jobs! Time: ", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-    except Exception as e:
-        traceback.print_exc()
+            logging.info(
+                f"No new jobs! Time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+    except Exception:
+        logging.error("An error occurred in the scheduled task.", exc_info=True)
         await channel.send(
-            "There is a potential issue with the bot! Please check the logs. Shutting down the bot..."
+            "There is a potential issue with the bot! Please check the logs."
         )
         await bot.close()
-        print(e)
     finally:
         end_time = datetime.now()
-        execution_time = end_time - start_time  # Calculate execution time
-        print(f"Task execution time: {execution_time}")
+        execution_time = end_time - start_time
+        logging.info(f"Task execution time: {execution_time}")
 
 
 @scheduled_task.before_loop
 async def before_scheduled_task():
     """
-    Wait until the bot is ready before starting the loop
+    Wait until the bot is ready before starting the loop.
     """
     await bot.wait_until_ready()
 
@@ -97,21 +114,24 @@ async def before_scheduled_task():
 @bot.event
 async def on_ready():
     """
-    Event that is triggered when the bot is ready to start sending messages
+    Event that is triggered when the bot is ready to start sending messages.
     """
-    print(f"Logged in as {bot.user.name}")
+    logging.info(f"Logged in as {bot.user.name}")
     channel = bot.get_channel(int(CHANNEL_ID))
     if channel:
-        print("Successfully joined the discord! Ready to provide jobs")
+        logging.info("Successfully joined the Discord! Ready to provide jobs.")
     else:
-        print(f"Could not find channel with ID {CHANNEL_ID}")
+        logging.error(f"Could not find channel with ID {CHANNEL_ID}")
+
     github_utilities = GitHubUtilities(
-        token=GITHUB_TOKEN,
-        repo_name="SimplifyJobs/Summer2024-Internships",
+        token=GITHUB_TOKEN, repo_name="SimplifyJobs/Summer2024-Internships"
     )
     internship_utilities = InternshipUtilities(summer=True, coop=True)
-    scheduled_task.start(github_utilities, internship_utilities)  # Start the loop here
+    scheduled_task.start(github_utilities, internship_utilities)  # Start the loop
 
 
-# Run the bot
-bot.run(DISCORD_TOKEN)
+if __name__ == "__main__":
+    try:
+        bot.run(DISCORD_TOKEN)
+    except Exception:
+        logging.error("Fatal error in main execution:", exc_info=True)

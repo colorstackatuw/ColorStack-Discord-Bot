@@ -9,15 +9,16 @@ Prerequisites:
 - PyGithub: A Python library to access the GitHub API v3.
 - A GitHub personal access token with the necessary permissions.
 """
-from github import Auth, Github
-import github
 import json
 from collections.abc import Iterable
 from pathlib import Path
 
+import github
+from github import Auth, Github
+
 
 class GitHubUtilities:
-    FILEPATH = Path("../commits/repository_links_commits.json")  
+    FILEPATH = Path("../commits/repository_links_commits.json")
 
     def __init__(self, token, repo_name):
         self.repo_name = repo_name

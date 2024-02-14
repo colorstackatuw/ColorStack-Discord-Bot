@@ -10,3 +10,4 @@ services:
       - GIT_TOKEN
     volumes:
       - ./commits:/app/commits
+      - ./logs:/app/logs

@@ -7,11 +7,10 @@ WORKDIR /app
 # Install git, required to clone the repository
 RUN apt-get update && apt-get install -y git
 
-# Clone the repository into the /app directory
-#RUN git clone https://github.com/DavidSalazar123/ColorStack-Discord-Bot.git /app
-COPY . . 
+# Copy the current directory contents into the container at /app
+COPY . .
 
-# Assuming requirements.txt is in the root, if it's inside src adjust the path accordingly
+# Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Change the working directory to /app/src where DiscordBot.py is located

@@ -8,16 +8,17 @@ Prerequisites:
 - Discord: A Python library to interact with the Discord API
 - A GitHub personal access token with the necessary permissions.
 """
+import logging
 import re
-from datetime import datetime, timedelta
-import discord
-import traceback
 from collections.abc import Iterable
+from datetime import datetime, timedelta
 from pathlib import Path
+
+import discord
 
 
 class InternshipUtilities:
-    FILEPATH = Path("../commits/repository_links_commits.json") 
+    FILEPATH = Path("../commits/repository_links_commits.json")
     NOT_US = ["Canada", "UK", "United Kingdom", "EU"]
 
     def __init__(self, summer: bool, coop: bool):
@@ -29,34 +30,34 @@ class InternshipUtilities:
 
     def clearJobLinks(self) -> None:
         """
-        Clear the Co-Op dictionary links
+        Clear the Co-Op dictionary links.
         """
         self.coop_job_links = dict()
-    
+
     def clearJobCounter(self) -> None:
         """
-        Clear the job counter
+        Clear the job counter.
         """
         self.total_jobs = 0
 
     def isWithinDateRange(self, job_date: datetime, current_date: datetime) -> bool:
         """
-        Determine if the job posting is within the past week
+        Determine if the job posting is within the past week.
 
         Parameters:
-            - job_date: The date of the job posting
-            - current_date: The current date
+            - job_date: The date of the job posting.
+            - current_date: The current date.
         Returns:
-            - bool: True if the job posting is within the past week, False otherwise
+            - bool: True if the job posting is within the past week, False otherwise.
         """
         return timedelta(days=0) <= current_date - job_date <= timedelta(days=7)
 
     def saveCompanyName(self, company_name: str) -> None:
         """
-        Save the previous job title into the class variable
+        Save the previous job title into the class variable.
 
         Parameters:
-            - company_name: The company name
+            - company_name: The company name.
         """
         self.previous_job_title = company_name
 
@@ -68,13 +69,13 @@ class InternshipUtilities:
         is_summer: bool,
     ):
         """
-        Retrieve the Summer or Co-op internships from the GitHub repository
+        Retrieve the Summer or Co-op internships from the GitHub repository.
 
         Parameters:
-            - channel: The discord channel to send the job postings
-            - job_postings: The list of job postings
-            - current_date: The current date
-            - is_summer: A boolean to record a job if it's summer or co-op internships
+            - channel: The discord channel to send the job postings.
+            - job_postings: The list of job postings.
+            - current_date: The current date.
+            - is_summer: A boolean to record a job if it's summer or co-op internships.
         """
         try:
             for job in job_postings:
@@ -181,5 +182,5 @@ class InternshipUtilities:
                 await channel.send(post)
 
         except Exception as e:
-            traceback.print_exc()
+            logging.exception("Failed to retrieve internships: %s", e)
             raise e
