@@ -17,6 +17,7 @@ from datetime import datetime
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
+from discord.ext import commands, tasks
 from GitHubUtilities import GitHubUtilities
 from InternshipUtilities import InternshipUtilities
 
@@ -27,21 +28,12 @@ GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
 # Set up logging: log INFO+ levels to file, appending new entries, with detailed format.
 logging.basicConfig(
-    filename="/app/logs/discord_bot.log",
+    filename="/logs/discord_bot.log",
     filemode="a",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-
-logging.basicConfig(
-    filename="/app/logs/discord_bot.log",
-    filemode="a",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-
 
 intents = discord.Intents.default()
 intents.messages = True  # Enable message tracking

@@ -1,0 +1,31 @@
+name: Deploy to Oracle Cloud VM
+
+on:
+  push:
+    branches:
+      - main
+      - test
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into Oracle VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_KEY }}          
+          script: |
+            cd ColorStack-Discord-Bot/
+            echo "Signed into VM"
+            git pull
+            echo "Pulled latest changes from GitHub"
+            docker-compose down
+            echo "Shutdown Docker Containers"
+            docker-compose up -d --build
+            echo "Started Docker Container!"
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+          GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
