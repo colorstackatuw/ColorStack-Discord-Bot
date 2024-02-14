@@ -28,7 +28,7 @@ GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
 # Set up logging: log INFO+ levels to file, appending new entries, with detailed format.
 logging.basicConfig(
-    filename="/logs/discord_bot.log",
+    filename="/app/logs/discord_bot.log",
     filemode="a",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s: %(message)s",
