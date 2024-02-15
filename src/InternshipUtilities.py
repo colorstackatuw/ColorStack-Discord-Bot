@@ -19,7 +19,7 @@ import discord
 
 class InternshipUtilities:
     FILEPATH = Path("../commits/repository_links_commits.json")
-    NOT_US = ["Canada", "UK", "United Kingdom", "EU"]
+    NOT_US = ["canada", "uk", "united kingdom", "eu"]
 
     def __init__(self, summer: bool, coop: bool):
         self.is_summer = summer
@@ -67,7 +67,7 @@ class InternshipUtilities:
         job_postings: Iterable[str],
         current_date: datetime,
         is_summer: bool,
-    ):
+    ) -> None:
         """
         Retrieve the Summer or Co-op internships from the GitHub repository.
 
@@ -89,10 +89,15 @@ class InternshipUtilities:
 
                 # If the company name is not present, we need to use the previous company name
                 if "↳" not in non_empty_elements[1]:
-                    match = re.search(r"\[([^\]]+)\]", non_empty_elements[1])
+                    job_header = non_empty_elements[1]
+                    start_pos = job_header.find("[") + 1
+                    end_pos = job_header.find("]", start_pos)
 
                     # If the company doesn't have link embedded, we just use the company name
-                    company_name = match.group(1) if match else non_empty_elements[1]
+                    if start_pos >= 0 and end_pos >= 0:
+                        company_name = job_header[start_pos:end_pos]
+                    else:
+                        company_name = non_empty_elements[1]
                     self.saveCompanyName(company_name)
                 else:
                     company_name = self.previous_job_title
@@ -111,33 +116,32 @@ class InternshipUtilities:
                 list_locations = []
                 location_html = non_empty_elements[3]
                 if "<details>" in location_html:
-                    locations_content = re.search(
-                        r"(?<=</summary>)(.*?)(?=</details>)",
-                        location_html,
-                        flags=re.DOTALL,
-                    ).group(1)
+                    start = location_html.find("</summary>") + len("</summary>")
+                    end = location_html.find("</details>", start)
+                    locations_content = location_html[start:end]
                     for location in locations_content.split("</br>"):
                         location = location.strip()
+                        lower_location = location.lower()
                         if location and not any(
-                            not_us_country in location for not_us_country in self.NOT_US
+                            not_us_country in lower_location for not_us_country in self.NOT_US
                         ):
                             list_locations.append(location)
 
                 elif "</br>" in location_html:
                     split_locations = location_html.split("</br>")
                     for location in split_locations:
+                        lower_location = location.lower()
                         if not any(
-                            not_us_country in location for not_us_country in self.NOT_US
+                            not_us_country in lower_location for not_us_country in self.NOT_US
                         ):
                             list_locations.append(location)
                 elif location_html:
                     location = (
-                        "Remote"
-                        if re.search(r"(?i)\bremote\b", location_html)
-                        else location_html
+                        "Remote" if "remote" in location_html.lower() else location_html
                     )
+                    lower_location = location.lower()
                     is_outside_us = any(
-                        not_us_country in location for not_us_country in self.NOT_US
+                        not_us_country in lower_location for not_us_country in self.NOT_US
                     )
 
                     if location == "Remote" or not is_outside_us:
@@ -179,7 +183,8 @@ class InternshipUtilities:
                     f"\n\n\n"
                 )
                 self.total_jobs += 1
-                await channel.send(post)
+                print(post)
+                #await channel.send(post)
 
         except Exception as e:
             logging.exception("Failed to retrieve internships: %s", e)
