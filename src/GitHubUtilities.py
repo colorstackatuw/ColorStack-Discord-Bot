@@ -1,7 +1,7 @@
 """
-GitHub Utilities Script
+GitHub Utilities Class
 
-This script provides a set of utilities to interact with GitHub repositories using the PyGithub library. 
+This class provides a set of utilities to interact with GitHub repositories using the PyGithub library. 
 It includes functionalities to establish a connection to a specified GitHub repository, update and retrieve 
 the last commit information, and check for new commits.
 
@@ -25,7 +25,7 @@ class GitHubUtilities:
         self.github = Github(auth=Auth.Token(token))
         self.comparison = None
 
-    def createGitHubConnection(self):
+    def createGitHubConnection(self) -> github.Repository.Repository:
         """
         Create a connection to the specified GitHub repository
 
@@ -34,17 +34,17 @@ class GitHubUtilities:
         """
         return self.github.get_repo(self.repo_name)
 
-    def setNewCommit(self, commit: str):
+    def setNewCommit(self, last_commit: str) -> None:
         """
         Save the last commit information to prevent duplicate job postings
 
         Parameters:
-            - commit: The last commit information
+            - last_commit: The last saved commit sha from `commits/repository_links_commits.json`
         """
         with self.FILEPATH.open("r") as file:
             data_json = json.load(file)
 
-        data_json["last_saved_sha"] = commit
+        data_json["last_saved_sha"] = last_commit
 
         with self.FILEPATH.open("w") as file:
             json.dump(data_json, file)
@@ -108,7 +108,7 @@ class GitHubUtilities:
 
         Parameters:
             - repo: The GitHub repository
-            - last_commit: The last commit hexadecimal information
+            - last_commit: The last saved commit sha from `commits/repository_links_commits.json`
         Returns:
             - bool: True if there is a new commit, False otherwise
         """
@@ -119,7 +119,6 @@ class GitHubUtilities:
         Retrieve the commit changes that make additions to the .md files
 
         Parameters:
-            - repo: The GitHub repository
             - readme_file: The name of the .md file
         Returns:
             - Iterable[str]: The lines that contain the job postings
