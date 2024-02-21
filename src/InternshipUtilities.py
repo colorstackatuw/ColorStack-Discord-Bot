@@ -1,13 +1,14 @@
 """
-Internship Utilities Script
+Internship Utilities Class
 
-This script provides a set of utilities to interact with the GitHub repository containing the job postings
+This class provides a set of utilities to interact with the GitHub repository containing the job postings
 
 Prerequisites:
 - PyGithub: A Python library to access the GitHub API v3.
 - Discord: A Python library to interact with the Discord API
 - A GitHub personal access token with the necessary permissions.
 """
+import asyncio
 import logging
 import re
 from collections.abc import Iterable
@@ -18,21 +19,21 @@ import discord
 
 
 class InternshipUtilities:
-    FILEPATH = Path("../commits/repository_links_commits.json")
+    FILEPATH = Path("../commits/repository_links_commits.json") 
     NOT_US = ["canada", "uk", "united kingdom", "eu"]
 
     def __init__(self, summer: bool, coop: bool):
         self.is_summer = summer
         self.is_coop = coop
         self.previous_job_title = ""
-        self.coop_job_links = dict()
+        self.coop_job_links = set()
         self.total_jobs = 0
 
     def clearJobLinks(self) -> None:
         """
         Clear the Co-Op dictionary links.
         """
-        self.coop_job_links = dict()
+        self.coop_job_links = set()
 
     def clearJobCounter(self) -> None:
         """
@@ -63,7 +64,8 @@ class InternshipUtilities:
 
     async def getInternships(
         self,
-        channel: discord.TextChannel,
+        bot: discord.ext.commands.Bot,
+        channels: list[int],
         job_postings: Iterable[str],
         current_date: datetime,
         is_summer: bool,
@@ -72,7 +74,8 @@ class InternshipUtilities:
         Retrieve the Summer or Co-op internships from the GitHub repository.
 
         Parameters:
-            - channel: The discord channel to send the job postings.
+            - bot: The Discord bot.
+            - channels: All the channels to send the job postings to 
             - job_postings: The list of job postings.
             - current_date: The current date.
             - is_summer: A boolean to record a job if it's summer or co-op internships.
@@ -83,9 +86,7 @@ class InternshipUtilities:
                 job_link_index = 4 if is_summer else 5
 
                 # Grab the data and remove the empty elements
-                non_empty_elements = [
-                    element.strip() for element in job.split("|") if element.strip()
-                ]
+                non_empty_elements = [element.strip() for element in job.split("|") if element.strip()]
 
                 # If the company name is not present, we need to use the previous company name
                 if "↳" not in non_empty_elements[1]:
@@ -122,27 +123,19 @@ class InternshipUtilities:
                     for location in locations_content.split("</br>"):
                         location = location.strip()
                         lower_location = location.lower()
-                        if location and not any(
-                            not_us_country in lower_location for not_us_country in self.NOT_US
-                        ):
+                        if location and not any(not_us_country in lower_location for not_us_country in self.NOT_US):
                             list_locations.append(location)
 
                 elif "</br>" in location_html:
                     split_locations = location_html.split("</br>")
                     for location in split_locations:
                         lower_location = location.lower()
-                        if not any(
-                            not_us_country in lower_location for not_us_country in self.NOT_US
-                        ):
+                        if not any(not_us_country in lower_location for not_us_country in self.NOT_US):
                             list_locations.append(location)
                 elif location_html:
-                    location = (
-                        "Remote" if "remote" in location_html.lower() else location_html
-                    )
+                    location = "Remote" if "remote" in location_html.lower() else location_html
                     lower_location = location.lower()
-                    is_outside_us = any(
-                        not_us_country in lower_location for not_us_country in self.NOT_US
-                    )
+                    is_outside_us = any(not_us_country in lower_location for not_us_country in self.NOT_US)
 
                     if location == "Remote" or not is_outside_us:
                         list_locations.append(location)
@@ -156,10 +149,7 @@ class InternshipUtilities:
                     self.saveCompanyName(company_name)
                     continue
 
-                job_link = re.search(
-                    r'href="([^"]+)"', non_empty_elements[job_link_index]
-                ).group(1)
-
+                job_link = re.search(r'href="([^"]+)"', non_empty_elements[job_link_index]).group(1)
                 job_title = non_empty_elements[2]
 
                 if is_summer:
@@ -170,7 +160,7 @@ class InternshipUtilities:
                         continue
                 else:
                     terms = " |".join(non_empty_elements[4].split(","))
-                    self.coop_job_links[job_link] = None  # Save the job link
+                    self.coop_job_links.add(job_link)  # Save the job link
 
                 post = (
                     f"**📅 Date Posted:** {date_posted}\n"
@@ -183,7 +173,10 @@ class InternshipUtilities:
                     f"\n\n\n"
                 )
                 self.total_jobs += 1
-                await channel.send(post)
+
+                # Send the job posting to the Discord channel
+                coroutines = (bot.get_channel(channel).send(post) for channel in channels if bot.get_channel(channel))
+                await asyncio.gather(*coroutines)
 
         except Exception as e:
             logging.exception("Failed to retrieve internships: %s", e)

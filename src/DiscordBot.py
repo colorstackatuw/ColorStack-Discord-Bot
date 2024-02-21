@@ -10,89 +10,136 @@ Prerequisites:
 - A Discord bot token with the necessary permissions.
 - A GitHub personal access token with the necessary permissions.
 """
+import asyncio
 import logging
 import os
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 
 import discord
+from DatabaseConnector import DatabaseConnector
+from discord import ChannelType
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
-from discord.ext import commands, tasks
 from GitHubUtilities import GitHubUtilities
 from InternshipUtilities import InternshipUtilities
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
 GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
-# Set up logging: log INFO+ levels to file, appending new entries, with detailed format.
-logging.basicConfig(
-    filename="/app/logs/discord_bot.log",
-    filemode="a",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Global Lock
+lock = asyncio.Lock()
 
+# Set up logging: log INFO+ levels to file, appending new entries, with detailed format.
+logger = logging.getLogger("discord_bot_logger")
+logger.setLevel(logging.INFO)
+
+# Ensure that files are rotated every 5MB, and keep 3 backups.
+handler = RotatingFileHandler(filename="/app/logs/discord_bot.log", maxBytes=5 * 1024 * 1024, backupCount=3) 
+handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
+logger.addHandler(handler)
+
+# Set up the bot
 intents = discord.Intents.default()
-intents.messages = True  # Enable message tracking
-intents.message_content = True  # Enable message content tracking
+intents.messages = True
+intents.message_content = True
 bot = commands.Bot(command_prefix="$", intents=intents)
 
 
 @tasks.loop(seconds=60)
-async def scheduled_task(
-    github_utilities: GitHubUtilities, internship_utilities: InternshipUtilities
-):
+async def scheduled_task(github_utilities: GitHubUtilities, internship_utilities: InternshipUtilities):
     """
     A scheduled task that runs every 60 seconds to check for new commits in the GitHub repository.
+
+    Parameters:
+        - github_utilities: The GitHubUtilities object
+        - internship_utilities: The InternshipUtilities object
     """
-    try:
-        start_time = datetime.now()
-        channel = bot.get_channel(int(CHANNEL_ID))
-        repo = github_utilities.createGitHubConnection()
-        last_saved_commit = github_utilities.getSavedSha(repo)
+    async with lock:
+        try:
+            start_time = datetime.now()
+            repo = github_utilities.createGitHubConnection()
+            last_saved_commit = github_utilities.getSavedSha(repo)
 
-        if github_utilities.isNewCommit(repo, last_saved_commit):
-            logging.info("New commit has been found. Finding new jobs...")
-            github_utilities.setComparison(repo)  # Get the comparison file
+            if github_utilities.isNewCommit(repo, last_saved_commit):
+                logger.info("New commit has been found. Finding new jobs...")
+                github_utilities.setComparison(repo)  # Get the comparison file
 
-            if internship_utilities.is_coop:
-                job_postings = github_utilities.getCommitChanges("README-Off-Season.md")
-                await internship_utilities.getInternships(
-                    channel, job_postings, start_time, False
-                )
-            if internship_utilities.is_summer:
-                job_postings = github_utilities.getCommitChanges("README.md")
-                await internship_utilities.getInternships(
-                    channel, job_postings, start_time, True
-                )
-            github_utilities.setNewCommit(github_utilities.getLastCommit(repo))
-            logging.info(
-                f"There were {internship_utilities.total_jobs} new jobs found!"
-            )
+                # Get the channels to send the job postings
+                db = DatabaseConnector()
+                channel_ids = db.getChannels()
 
-            # Clear all the cached data
-            internship_utilities.clearJobLinks()
-            internship_utilities.clearJobCounter()
-            github_utilities.clearComparison()
+                if internship_utilities.is_coop:
+                    job_postings = github_utilities.getCommitChanges("README-Off-Season.md")
+                    await internship_utilities.getInternships(bot, channel_ids[:20], job_postings, start_time, False)
 
-            logging.info("All jobs have been posted!")
+                if internship_utilities.is_summer:
+                    job_postings = github_utilities.getCommitChanges("README.md")
+                    await internship_utilities.getInternships(bot, channel_ids[:20], job_postings, start_time, True)
+
+                github_utilities.setNewCommit(github_utilities.getLastCommit(repo))
+                logger.info(f"There were {internship_utilities.total_jobs} new jobs found!")
+
+                # Clear all the cached data
+                internship_utilities.clearJobLinks()
+                internship_utilities.clearJobCounter()
+                github_utilities.clearComparison()
+
+                logger.info("All jobs have been posted!")
+        except Exception:
+            logger.error("An error occurred in the scheduled task.", exc_info=True)
+            await bot.close()
+        finally:
+            end_time = datetime.now()
+            execution_time = end_time - start_time
+            logger.info(f"Task execution time: {execution_time}")
+
+
+@bot.event
+async def on_guild_remove(guild: discord.Guild):
+    """
+    Event that is triggered when the bot is removed from a server.
+
+    Parameters:
+        - guild: The guild that the bot has been removed from.
+    """
+    async with lock:
+        logger.info(f"The bot has been removed from: {guild.name}")
+        db = DatabaseConnector()
+        db.deleteServer(guild)
+
+
+@bot.event
+async def on_guild_join(guild: discord.Guild):
+    """
+    Event that is triggered when the bot joins a new server.
+
+    Parameters:
+        - guild: The guild that the bot has joined.
+    """
+    async with lock:
+        logger.info("The bot joined a new server!")
+        found_channel = None
+
+        for channel in guild.channels:
+            if channel.name == "opportunities-bot" and channel.type == ChannelType.text:
+                found_channel = channel
+                break
+
+        if found_channel:
+            db = DatabaseConnector()
+            db.writeChannel(guild, found_channel)
+            logger.info(f"Found 'opportunities-bot' channel in {guild.name}")
+            await bot.get_channel(found_channel.id).send("Hello! I am the ColorStack Bot. I will be posting new job opportunities here.")
         else:
-            logging.info(
-                f"No new jobs! Time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-    except Exception:
-        logging.error("An error occurred in the scheduled task.", exc_info=True)
-        await channel.send(
-            "There is a potential issue with the bot! Please check the logs."
-        )
-        await bot.close()
-    finally:
-        end_time = datetime.now()
-        execution_time = end_time - start_time
-        logging.info(f"Task execution time: {execution_time}")
+            logger.error(f"Could not find a channel named 'opportunities-bot' in {guild.name}.")
+            await guild.leave()
 
 
 @scheduled_task.before_loop
@@ -108,16 +155,9 @@ async def on_ready():
     """
     Event that is triggered when the bot is ready to start sending messages.
     """
-    logging.info(f"Logged in as {bot.user.name}")
-    channel = bot.get_channel(int(CHANNEL_ID))
-    if channel:
-        logging.info("Successfully joined the Discord! Ready to provide jobs.")
-    else:
-        logging.error(f"Could not find channel with ID {CHANNEL_ID}")
+    logger.info(f"Logged in as {bot.user.name}")
 
-    github_utilities = GitHubUtilities(
-        token=GITHUB_TOKEN, repo_name="SimplifyJobs/Summer2024-Internships"
-    )
+    github_utilities = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/Summer2024-Internships")
     internship_utilities = InternshipUtilities(summer=True, coop=True)
     scheduled_task.start(github_utilities, internship_utilities)  # Start the loop
 
@@ -126,4 +166,4 @@ if __name__ == "__main__":
     try:
         bot.run(DISCORD_TOKEN)
     except Exception:
-        logging.error("Fatal error in main execution:", exc_info=True)
+        logger.error("Fatal error in main execution:", exc_info=True)
