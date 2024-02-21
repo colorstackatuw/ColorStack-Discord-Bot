@@ -13,11 +13,11 @@ Prerequisites:
 import logging
 import os
 from datetime import datetime
+import logging.handlers
 
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
-from discord.ext import commands, tasks
 from GitHubUtilities import GitHubUtilities
 from InternshipUtilities import InternshipUtilities
 
@@ -27,13 +27,18 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")
 GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
 # Set up logging: log INFO+ levels to file, appending new entries, with detailed format.
-logging.basicConfig(
-    filename="/app/logs/discord_bot.log",
-    filemode="a",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+logger = logging.getLogger("discord_bot_logger")
+logger.setLevel(logging.INFO)
+
+# Ensure that files are rotated every 5MB, and keep 3 backups.
+handler = logging.handlers.RotatingFileHandler(filename="/app/logs/discord_bot.log", maxBytes=5 * 1024 * 1024, backupCount=3)
+handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 )
+logger.addHandler(handler)
 
 intents = discord.Intents.default()
 intents.messages = True  # Enable message tracking
@@ -79,10 +84,6 @@ async def scheduled_task(
             github_utilities.clearComparison()
 
             logging.info("All jobs have been posted!")
-        else:
-            logging.info(
-                f"No new jobs! Time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
     except Exception:
         logging.error("An error occurred in the scheduled task.", exc_info=True)
         await channel.send(
