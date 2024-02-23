@@ -36,7 +36,7 @@ logger = logging.getLogger("discord_bot_logger")
 logger.setLevel(logging.INFO)
 
 # Ensure that files are rotated every 5MB, and keep 3 backups.
-handler = RotatingFileHandler(filename="/app/logs/discord_bot.log", maxBytes=5 * 1024 * 1024, backupCount=3) 
+handler = RotatingFileHandler(filename="/app/logs/discord_bot.log", maxBytes=5 * 1024 * 1024, backupCount=3)
 handler.setFormatter(
     logging.Formatter(
         "%(asctime)s - %(levelname)s - %(name)s: %(message)s",
@@ -123,23 +123,17 @@ async def on_guild_join(guild: discord.Guild):
     Parameters:
         - guild: The guild that the bot has joined.
     """
-    async with lock:
-        logger.info("The bot joined a new server!")
-        found_channel = None
+    try:
+        async with lock:
+            logger.info("The bot joined a new server!")
+            channel = await guild.create_text_channel("opportunities-bot")
 
-        for channel in guild.channels:
-            if channel.name == "opportunities-bot" and channel.type == ChannelType.text:
-                found_channel = channel
-                break
-
-        if found_channel:
             db = DatabaseConnector()
-            db.writeChannel(guild, found_channel)
-            logger.info(f"Found 'opportunities-bot' channel in {guild.name}")
-            await bot.get_channel(found_channel.id).send("Hello! I am the ColorStack Bot. I will be posting new job opportunities here.")
-        else:
-            logger.error(f"Could not find a channel named 'opportunities-bot' in {guild.name}.")
-            await guild.leave()
+            db.writeChannel(guild, channel)
+            await channel.send("Hello! I am the ColorStack Bot. I will be posting new job opportunities here.")
+    except Exception:
+        logger.error(f"Could not create a channel named 'opportunities-bot' in {guild.name}.", exc_info=True)
+        await guild.leave()
 
 
 @scheduled_task.before_loop
