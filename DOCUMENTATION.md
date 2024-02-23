@@ -8,6 +8,7 @@
   - [DiscordBot](#discordbot)
   - [GitHubUtilities](#githubutilities)
   - [InternshipUtilities](#internshiputilities)
+  - [DatabaseConnector](#databaseconnector)
 
 ## Installation
 
@@ -22,12 +23,12 @@ While the bot is running, it will review the GitHub repositories and post any ne
    1. It's in the United States or Remote
    1. The job posting is from the past 7 days
    1. The job posting is not a duplicate of a co-op internship
-1. Once the post is validated, it will be posted in the Discord server.
+1. Once the post is validated, it will be posted within all the discord servers it's apart of by getting the channels from NoSQL database.
 1. After all the processing is done, the bot will save the commit SHA in `commits/repository_links_commits.json`, sleep for 60 seconds, and repeat the process.
 
 ## Classes
 
-There are three main Python classes that allow the bot to function properly.
+There are four main Python classes that allow the bot to function properly.
 
 ## DiscordBot
 
@@ -41,6 +42,22 @@ A scheduled task that runs every 60 seconds to check for new commits in the GitH
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `github_utilities`     | An instance of the `GitHubUtilities` class, enabling the bot to connect to the GitHub API and scrape GitHub repositories                                     |
 | `internship_utilities` | An instance of the `InternshipUtilities` class, allowing the bot to scrape GitHub repositories and post opportunities to the Discord server every 60 seconds |
+
+### on_guild_remove
+
+Event that occurs when the bot is removed from a discord server to remove the data from the NoSQL database to stop sending messages
+
+| Parameter              | Description                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `guild`     | The guild/server that the bot has been removed from              |
+
+### on_guild_join
+
+Event that occurs when the bot joins a discord server to add data to NoSQL database. If the server doesn't contain `opportunities-bot` text channel, the bot removes itself from the server
+
+| Parameter              | Description                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `guild`     | The guild/server that the bot joined              |
 
 ### before_scheduled_task
 
@@ -160,7 +177,13 @@ Retrieve the Summer or Co-op internships from the GitHub repository.
 
 | Parameter      | Description                                                   |
 | -------------- | ------------------------------------------------------------- |
-| `channel`      | The Discord channel to send the job postings                  |
+|`bot`| The Discord bot |
+| `channels`      | The Discord channels to send the job postings                  |
 | `job_postings` | The list of job postings                                      |
 | `current_date` | The current date                                              |
 | `is_summer`    | A boolean to record a job if it's summer or co-op internships |
+
+
+## DatabaseConnector
+
+This class helps connect to NoSQL database to track all servers the bot is apart of. This class will not be available to the public as it contains private infomraiton about the database.

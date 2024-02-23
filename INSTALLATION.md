@@ -12,13 +12,10 @@ Inorder to provide the bot with the necessary environment variables, you will ne
 
 ```env
 DISCORD_TOKEN=<YOUR-TOKEN>
-CHANNEL_ID=<DISCORD-CHANNEL-ID>
 GIT_TOKEN=<PERSONAL-GITHUB-TOKEN>
 ```
 
 **Discord Token** - This is the token that you will get from the Discord Developer Portal. This token is used to authenticate the bot with the Discord API.
-
-**Channel ID** - This is the ID of the channel that you want the bot to send messages to. You can get this by right clicking on the channel and clicking on "Copy ID". Creating a testing server and channel is recommended.
 
 **GitHub Token** - This is the token that you will get from the GitHub Developer Portal. This token is used to authenticate the bot with the GitHub API.
 

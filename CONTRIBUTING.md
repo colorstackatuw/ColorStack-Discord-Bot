@@ -19,6 +19,7 @@ before any PR. We like to discuss things before implementation. We want to be fo
 - All Git commits are required to be signed and reviewed by at least two maintainers. If you are not getting a response, please reach out to the maintainers after **1 week**.
 - If you are creating or editing a new class, method, or function, please make sure to add the appropriate [documentation](https://github.com/colorstackatuw/ColorStack-Discord-Bot/blob/main/DOCUMENTATION.md).
 - All tests must be green before merging. Our CI/CD will run [tests](https://github.com/colorstackatuw/ColorStack-Discord-Bot/actions) to ensure everything is OK.
+- Before submitting the PR, please make sure to format with `pyproject.toml` to keep it consistent
 
 ## Build and Test
 
@@ -39,3 +40,13 @@ docker-compose run --rm main pytest /app/tests
 ```
 
 If you want to debug the tests on your local machine, run your IDE debugger within `src/DiscordBot.py` to debug the bot (using print statments instead of `await.send()` would be beneficial). **Just be sure that it also works within Docker**
+
+Although the database connector is private code hosted within the VM, what you can do instead is copy your channel ID within your test discord server and replace the following within `src/DiscordBot.py`
+
+```python
+# Get the channels to send the job postings
+#db = DatabaseConnector()
+channel_ids = [12345] # Your channel id
+```
+
+This will allow you send messages to your channel when running on your local machine.
