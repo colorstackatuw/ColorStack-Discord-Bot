@@ -3,7 +3,7 @@ import pytest
 from src.GitHubUtilities import GitHubUtilities
 
 # How to test the code
-# 1) Run the cmd: pytest tests/test_GitHubTests.py
+# 1) Run the cmd: pytest tests/test_GitHub.py
 
 @patch('os.getenv')
 def test_create_github_connection(mock_getenv):

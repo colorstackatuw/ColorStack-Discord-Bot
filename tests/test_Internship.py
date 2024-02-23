@@ -1,16 +1,22 @@
 import random
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock
-import discord
-import discord.ext as dpytest
-import discord.ext.commands as commands
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-import pytest_asyncio
-from discord.ext.commands import Cog, command
-from src.InternshipUtilities import InternshipUtilities
 
 # How to test the code
-# 1) Run the cmd: pytest tests/test_InternshipTests.py
+# 1) Run the cmd: pytest tests/test_Internship.py
+
+with patch.dict(
+    "sys.modules",
+    {
+        "discord": MagicMock(),
+        "discord.ext": MagicMock(),
+        "discord.ext.commands": MagicMock(),
+    },
+):
+    from src.InternshipUtilities import InternshipUtilities
+
 
 def test_is_within_date_range():
     # Arrange
@@ -38,53 +44,38 @@ def test_save_company_name():
     assert internship_util.previous_job_title == company_name
 
 
-class Misc(Cog):
-    @command()
-    async def send(self, ctx):
-        await ctx.send("Testing !")
-
-
-@pytest_asyncio.fixture
-async def bot():
-    # Setup
-    intents = discord.Intents.default()
-    intents.members = True
-    intents.message_content = True
-    bot = commands.Bot(command_prefix="!", intents=intents)
-    # setup the commands
-    await bot._async_setup_hook()
-    await bot.add_cog(Misc())
-
-    dpytest.configure(bot)
-
-    yield bot
-
-    # Teardown
-    await dpytest.empty_queue()
-
-
 @pytest.mark.asyncio
-async def test_get_internships():
-    # Arrange
-    internship_util = InternshipUtilities(True, False)
-    channel = AsyncMock()
-    channel.send = AsyncMock()  # Directly assign AsyncMock to channel's send method
-    job_postings = [
-        (
-            "| **[Western Digital](https://simplify.jobs/c/Western-Digital)** | Advanced Manufacturing Apprentice | "
-            'Fremont, CA | Spring 2024 | <a href="https://jobs.smartrecruiters.com/WesternDigital/743999965654172?utm_source=Simplify&ref=Simplify">'
-            '<img src="https://i.imgur.com/w6lyvuC.png" width="84" alt="Apply"></a> <a href="https://simplify.jobs/p/b84301fb-e173-45b1-a080-82f5e444af44?utm_source=GHList">'
-            '<img src="https://i.imgur.com/aVnQdox.png" width="30" alt="Simplify"></a> | Feb 05 |'
-        )
-    ]
-    current_date = datetime.now()
-    isSummer = True
+async def test_valid_job_posting():
+    # Directly create the mock bot
+    mock_bot = MagicMock()
+    mock_bot.get_channel = MagicMock(return_value=AsyncMock())
 
-    # Act
-    await internship_util.getInternships(channel, job_postings, current_date, isSummer)
+    channels = [123456789, 987654321]
+    job = """
+            | **[Rivian](https://simplify.jobs/c/Rivian)** | UIUC Research Park Intern - Embedded Systems Software Engineer | Urbana, IL | Summer 2024, Fall 2024, Spring 2025 |
+            <a href="https://careers.rivian.com/jobs/16695?lang=en-us&icims=1&utm_source=Simplify&ref=Simplify">
+            <img src="https://i.imgur.com/w6lyvuC.png" width="84" alt="Apply"></a>
+            <a href="https://simplify.jobs/p/707e7608-fdb1-4a20-a1b9-fc69c8c7cb9d?utm_source=GHList">
+            <img src="https://i.imgur.com/aVnQdox.png" width="30" alt="Simplify"></a>
+            | Feb 05 |
+            """
+    job_postings = [job]
+    current_date = datetime(2024, 1, 8)
 
-    # Diagnostic send call (to verify mock setup)
-    await channel.send("Diagnostic message")
+    # Create an instance of your class
+    instance = InternshipUtilities(summer=True, coop=True)
+    instance.saveCompanyName = MagicMock()
+    instance.isWithinDateRange = MagicMock(return_value=True)
+    instance.previous_job_title = ""
+    instance.job_cache = set()
+    instance.total_jobs = 0
 
-    # Assert
-    channel.send.assert_called()
+    # Use 'with patch' to mock any external dependencies if needed
+    with patch("discord.ext.commands.Bot", new=mock_bot):
+        # Execute the method
+        await instance.getInternships(mock_bot, channels, job_postings, current_date, True)
+
+    # Assertions to verify the behavior
+    assert len(instance.job_cache) == 1  # Ensure the job link was added to the cache
+    assert instance.total_jobs == 1  # Ensure the job count was incremented
+    mock_bot.get_channel.assert_called()  # Ensure get_channel was called for each channel
