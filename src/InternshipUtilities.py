@@ -25,14 +25,14 @@ class InternshipUtilities:
         self.is_summer = summer
         self.is_coop = coop
         self.previous_job_title = ""
-        self.coop_job_links = dict()
+        self.job_cache = set()
         self.total_jobs = 0
 
     def clearJobLinks(self) -> None:
         """
         Clear the Co-Op dictionary links.
         """
-        self.coop_job_links = dict()
+        self.job_cache = set()
 
     def clearJobCounter(self) -> None:
         """
@@ -160,17 +160,17 @@ class InternshipUtilities:
                     r'href="([^"]+)"', non_empty_elements[job_link_index]
                 ).group(1)
 
+                # If the job link is already in the cache, we skip the job posting
+                if job_link in self.job_cache:
+                    continue
+                
+                self.job_cache.add(job_link)  # Save the job link
                 job_title = non_empty_elements[2]
 
                 if is_summer:
                     terms = "Summer" + " " + str(current_year)
-
-                    # If the job link is already in the dictionary, we skip the job
-                    if job_link in self.coop_job_links:
-                        continue
                 else:
                     terms = " |".join(non_empty_elements[4].split(","))
-                    self.coop_job_links[job_link] = None  # Save the job link
 
                 post = (
                     f"**📅 Date Posted:** {date_posted}\n"
