@@ -88,6 +88,13 @@ class InternshipUtilities:
                 # Grab the data and remove the empty elements
                 non_empty_elements = [element.strip() for element in job.split("|") if element.strip()]
 
+                # If the job link is already in the cache, we skip the job posting
+                job_link = re.search(r'href="([^"]+)"', non_empty_elements[job_link_index]).group(1)
+                if job_link in self.job_cache:
+                    continue
+
+                self.job_cache.add(job_link)  # Save the job link
+
                 # If the company name is not present, we need to use the previous company name
                 if "↳" not in non_empty_elements[1]:
                     job_header = non_empty_elements[1]
@@ -149,15 +156,6 @@ class InternshipUtilities:
                     self.saveCompanyName(company_name)
                     continue
 
-                job_link = re.search(
-                    r'href="([^"]+)"', non_empty_elements[job_link_index]
-                ).group(1)
-
-                # If the job link is already in the cache, we skip the job posting
-                if job_link in self.job_cache:
-                    continue
-                
-                self.job_cache.add(job_link)  # Save the job link
                 job_title = non_empty_elements[2]
 
                 if is_summer:

@@ -18,7 +18,6 @@ from logging.handlers import RotatingFileHandler
 
 import discord
 from DatabaseConnector import DatabaseConnector
-from discord import ChannelType
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from GitHubUtilities import GitHubUtilities
@@ -125,12 +124,16 @@ async def on_guild_join(guild: discord.Guild):
     """
     try:
         async with lock:
-            logger.info("The bot joined a new server!")
-            channel = await guild.create_text_channel("opportunities-bot")
+            if len(bot.guilds) <= 20:
+                logger.info("The bot joined a new server!")
+                channel = await guild.create_text_channel("opportunities-bot")
 
-            db = DatabaseConnector()
-            db.writeChannel(guild, channel)
-            await channel.send("Hello! I am the ColorStack Bot. I will be posting new job opportunities here.")
+                db = DatabaseConnector()
+                db.writeChannel(guild, channel)
+                await channel.send("Hello! I am the ColorStack Bot. I will be posting new job opportunities here.")
+            else:
+                logger.info("We have reached max capacity of 20 servers!")
+                await guild.leave()
     except Exception:
         logger.error(f"Could not create a channel named 'opportunities-bot' in {guild.name}.", exc_info=True)
         await guild.leave()
