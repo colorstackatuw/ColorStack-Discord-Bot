@@ -10,7 +10,13 @@ This Discord bot posts summer and co-op internship opportunities from [Simplify 
 
 ## Installation
 
-❗ This Discord bot is currently only available for the ColorStack at UW-Madison Discord server. We are currently working on the expansion of the bot to other servers.
+To add the Discord Bot to your server, you must have the invite link from the National ColorStack Slack as it's a beta release. Don't change any of the permission settings!
+
+If the bot was successfully added, you should see this message within the `opportunities-bot` channel: `Hello! I am the ColorStack Bot. I will be posting new job opportunities here.`
+
+If you don't see the message and the bot has left the server, then you didn't give it the proper permissions, or we are at capacity.
+
+If you believe there is an issue with the bot, please make sure to [create an issue](https://github.com/colorstackatuw/ColorStack-Discord-Bot/issues).
 
 ## Documentation
 
