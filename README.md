@@ -6,7 +6,8 @@
 
 This Discord bot posts summer and co-op internship opportunities from [Simplify and Pitt CSC](https://github.com/SimplifyJobs/Summer2024-Internships). It's built and maintained by [ColorStack at UW-Madison](https://colorstack.cs.wisc.edu/).
 
-⚠️ Please note that this bot only posts opportunities that are in the United States or remote ⚠️
+> [!NOTE]
+> Please note that this bot only posts opportunities that are in the United States or remote
 
 ## Installation
 
