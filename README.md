@@ -2,8 +2,8 @@
 
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/colorstackatuw/ColorStack-Discord-Bot/blob/main/LICENSE)
 ![Github CI/CD Status](https://github.com/colorstackatuw/ColorStack-Discord-Bot/actions/workflows/deploy-vm.yml/badge.svg)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white&style=flat-square)](https://www.linkedin.com/company/colorstack-at-uw-madison)
-[![Instagram](https://img.shields.io/badge/Instagram-E4405F?style=for-the-badge&logo=instagram&logoColor=white&style=flat-square)](https://instagram.com/colorstackatuw)
+[![LinkedIn](https://img.shields.io/badge/ColorStack%20at%20UW--Madison-0077B5?style=for-the-badge&logo=linkedin&logoColor=white&style=flat-square)](https://www.linkedin.com/company/colorstack-at-uw-madison)
+[![Instagram](https://img.shields.io/badge/colorstackatuw-E4405F?style=for-the-badge&logo=instagram&logoColor=white&style=flat-square)](https://instagram.com/colorstackatuw)
 
 This Discord bot posts summer and co-op internship opportunities from [Simplify and Pitt CSC](https://github.com/SimplifyJobs/Summer2024-Internships). It's built and maintained by [ColorStack at UW-Madison](https://colorstack.cs.wisc.edu/).
 
