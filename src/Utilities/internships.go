@@ -5,10 +5,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
 )
 
-type jobPostingsChan chan string
 type InternshipUtilities struct {
 	IsSummer         bool
 	PreviousJobTitle string
@@ -59,8 +61,33 @@ Parameters:
 - currentDate: The current date for comparison.
 Returns: True if jobDate is within 3 days before currentDate, false otherwise.
 */
-func (iu *InternshipUtilities) IsWithinDateRange(jobDate, currentDate time.Time) bool {
-	return jobDate.After(currentDate.AddDate(0, 0, -3)) && jobDate.Before(currentDate)
+func (iu *InternshipUtilities) IsWithinDateRange(jobDate time.Time) bool {
+	currentDate := time.Now().UTC()
+	normalizedJobDate := time.Date(
+		currentDate.Year(),
+		jobDate.Month(),
+		jobDate.Day(),
+		0,
+		0,
+		0,
+		0,
+		time.UTC,
+	)
+	normalizedCurrentDate := time.Date(
+		currentDate.Year(),
+		currentDate.Month(),
+		currentDate.Day(),
+		0,
+		0,
+		0,
+		0,
+		time.UTC,
+	)
+
+	diff := normalizedCurrentDate.Sub(normalizedJobDate)
+	days := int(diff.Hours() / 24)
+
+	return 0 <= days && days <= 3
 }
 
 /*
@@ -97,122 +124,148 @@ It operates asynchronously and sends the formatted job postings through a jobPos
 
 Parameters:
 - channels: A slice of strings representing the channels to send job postings to.
-- currentDate: The current date to use for filtering job postings based on their date.
 - jobPostings: A slice of strings representing the job postings to process.
 - isSummer: A flag indicating whether to process summer internships.
 Returns: A channel through which processed and formatted job postings are sent.
 */
-func (iu *InternshipUtilities) GetInternships(channels []string, currentDate time.Time, jobPostings []string, isSummer bool) jobPostingsChan {
-	channel := make(chan string)
-	go func() {
-		for _, job := range jobPostings {
-			var companyName, jobTitle, jobLink, terms, location string
-			var listLocations []string
+func (iu *InternshipUtilities) GetInternships(
+	discordBot *discordgo.Session,
+	channels []string,
+	jobPostingChannel <-chan string,
+	isSummer bool,
+) {
 
-			// Determine the index of the job link
-			var jobLinkIndex int = 4
-			if !isSummer {
-				jobLinkIndex = 5
+	// Determine the index of the job link
+	currentYear := time.Now().Year()
+	var jobLinkIndex int = 4
+	if !isSummer {
+		jobLinkIndex = 5
+	}
+
+	for job := range jobPostingChannel {
+		var companyName, jobTitle, jobLink, terms, location string
+		var listLocations []string
+
+		// Grab data and remove the empty elements
+		elements := strings.Split(job, "|")
+		nonEmptyElements := make([]string, 0)
+		for _, element := range elements {
+			if strings.TrimSpace(element) != "" {
+				nonEmptyElements = append(nonEmptyElements, strings.TrimSpace(element))
 			}
+		}
 
-			// Grab data and remove the empty elements
-			elements := strings.Split(job, "|")
-			nonEmptyElements := make([]string, 0)
-			for _, element := range elements {
-				if strings.TrimSpace(element) != "" {
-					nonEmptyElements = append(nonEmptyElements, strings.TrimSpace(element))
-				}
-			}
+		// If job link is already in cache, we skip the job
+		re, err := regexp.Compile(`href="([^"]+)"`)
+		if err != nil {
+			fmt.Println("Regex compile error:", err) //! Add proper stacktrack error
+			return
+		}
 
-			// If job link is already in cache, we skip the job
-			re := regexp.MustCompile(`"href="([^"]+)"`)
-			matches := re.FindStringSubmatch(nonEmptyElements[jobLinkIndex])
-			if len(matches) < 2 {
-				continue
-			}
-			jobLink = matches[1]
+		matches := re.FindStringSubmatch(nonEmptyElements[jobLinkIndex])
+		if len(matches) < 2 {
+			continue
+		}
 
-			if _, exists := iu.JobCache[jobLink]; exists {
-				continue
-			}
-			iu.JobCache[jobLink] = struct{}{}
+		jobLink = matches[1]
+		if _, exists := iu.JobCache[jobLink]; exists {
+			continue
+		}
+		iu.JobCache[jobLink] = struct{}{}
 
-			// If the company name is not present, we need to use the previous company name
-			if !strings.Contains(nonEmptyElements[1], "↳") {
-				jobHeader := nonEmptyElements[1]
-				startPos := strings.Index(jobHeader, "[") + 1
-				endPos := strings.Index(jobHeader[startPos:], "]") + startPos
+		// If the company name is not present, we need to use the previous company name
+		if !strings.Contains(nonEmptyElements[1], "↳") {
+			jobHeader := nonEmptyElements[1]
+			startPos := strings.Index(jobHeader, "[") + 1
+			endPos := strings.Index(jobHeader[startPos:], "]") + startPos
 
-				if startPos > 0 && endPos > 0 {
-					companyName = jobHeader[startPos:endPos]
-				} else {
-					companyName = jobHeader
-				}
+			if startPos > 0 && endPos > 0 {
+				companyName = jobHeader[startPos:endPos]
 			} else {
-				companyName = iu.PreviousJobTitle
+				companyName = jobHeader
 			}
-			iu.SaveCompanyName(companyName)
+		} else {
+			companyName = iu.PreviousJobTitle
+		}
+		iu.SaveCompanyName(companyName)
 
-			currentYear := time.Now().Year()
-			datePosted := nonEmptyElements[len(nonEmptyElements)-1] + " " + strconv.Itoa(currentYear)
-			jobDate, _ := time.Parse("Jan 01 2002", datePosted)
+		datePosted := nonEmptyElements[len(nonEmptyElements)-1]
+		formatedDate := fmt.Sprintf("%s %d", datePosted, currentYear)
+		layout := "Jan 02 2006"
+		jobDate, err := time.Parse(layout, formatedDate)
+		if err != nil {
+			panic(err) // ! Add proper stack trace
+		}
 
-			if !iu.IsWithinDateRange(jobDate, currentDate) {
-				continue
-			}
+		if !iu.IsWithinDateRange(jobDate) {
+			continue
+		}
 
-			// We need to check that the position is within the US or remote
-			locationHTML := nonEmptyElements[3]
-			if strings.Contains(locationHTML, "<details>") {
-				start := strings.Index(locationHTML, "</summary>") + len("</summary>")
-				end := strings.Index(locationHTML, "</details>")
-				if start >= 0 && end >= 0 {
-					locationsContent := locationHTML[start:end]
-					locations := strings.Split(locationsContent, "</br>")
-					for _, location := range locations {
-						location = strings.TrimSpace(location)
-						if location != "" && !iu.isNotUS(location) {
-							listLocations = append(listLocations, location)
-						}
-					}
-				}
-			} else if strings.Contains(locationHTML, "</br>") {
-				locations := strings.Split(locationHTML, "</br>")
+		// We need to check that the position is within the US or remote
+		locationHTML := nonEmptyElements[3]
+		if strings.Contains(locationHTML, "<details>") {
+			start := strings.Index(locationHTML, "</summary>") + len("</summary>")
+			end := strings.Index(locationHTML, "</details>")
+			if start >= 0 && end >= 0 {
+				locationsContent := locationHTML[start:end]
+				locations := strings.Split(locationsContent, "</br>")
 				for _, location := range locations {
 					location = strings.TrimSpace(location)
-					if location != "" && !iu.isNotUS(location) {
+					if location != "" && !iu.IsNotUS(location) {
 						listLocations = append(listLocations, location)
 					}
 				}
-			} else if locationHTML != "" {
-				var location string = "Remote"
-				if !strings.Contains(strings.ToLower(locationHTML), "remote") && !iu.isNotUS(locationHTML) {
-					location = locationHTML
+			}
+		} else if strings.Contains(locationHTML, "</br>") {
+			locations := strings.Split(locationHTML, "</br>")
+			for _, location := range locations {
+				location = strings.TrimSpace(location)
+				if location != "" && !iu.IsNotUS(location) {
+					listLocations = append(listLocations, location)
 				}
-				listLocations = append(listLocations, location)
 			}
-
-			if len(listLocations) >= 1 {
-				location = strings.Join(listLocations, " | ")
-			} else {
-				continue
+		} else if locationHTML != "" {
+			var location string = "Remote"
+			if !strings.Contains(strings.ToLower(locationHTML), "remote") && !iu.IsNotUS(locationHTML) {
+				location = locationHTML
 			}
-
-			if isSummer {
-				terms = "Summer " + strconv.Itoa(currentYear)
-			} else {
-				terms = strings.Join(strings.Split(nonEmptyElements[4], ","), " |")
-			}
-
-			var post string = fmt.Sprintf("**📅 Date Posted:** %s\n**ℹ️ Company:** %s\n**👨‍💻 Job Title:** %s\n**📍 Location:** %s\n**➡️  When?:**  %s\n\n**👉 Job Link:** %s\n\n\n",
-				datePosted, companyName, jobTitle, location, terms, jobLink)
-			iu.TotalJobs++
-
-			//Work on concurrent posts
-
+			listLocations = append(listLocations, location)
 		}
-		close(channel)
-	}()
 
-	return channel
+		if len(listLocations) >= 1 {
+			location = strings.Join(listLocations, " | ")
+		} else {
+			continue
+		}
+
+		if isSummer {
+			terms = "Summer " + strconv.Itoa(currentYear)
+		} else {
+			terms = strings.Join(strings.Split(nonEmptyElements[4], ","), " |")
+		}
+		jobTitle = nonEmptyElements[2]
+
+		var post string = fmt.Sprintf(
+			"**📅 Date Posted:** %s\n"+
+				"**ℹ️ Company:** %s\n"+
+				"**👨‍💻 Job Title:** %s\n"+
+				"**📍 Location:** %s\n"+
+				"**➡️ When?:** %s\n\n"+
+				"**👉 Job Link:** %s\n\n\n",
+			datePosted, companyName, jobTitle, location, terms, jobLink,
+		)
+		iu.TotalJobs++
+
+		//Work on concurrent posts
+		wg := sync.WaitGroup{}
+		for _, channel := range channels {
+			wg.Add(1)
+			go func(ch string) {
+				defer wg.Done()
+				discordBot.ChannelMessageSend(ch, post)
+			}(channel)
+		}
+		wg.Wait()
+	}
+
 }

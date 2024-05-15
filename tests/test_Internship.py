@@ -15,7 +15,7 @@ with patch.dict(
         "discord.ext.commands": MagicMock(),
     },
 ):
-    from src.InternshipUtilities import InternshipUtilities
+    from src.Utilities.InternshipUtilities import InternshipUtilities
 
 
 def test_is_within_date_range():

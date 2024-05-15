@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 import pytest
-from src.GitHubUtilities import GitHubUtilities
+from src.Utilities.GitHubUtilities import GitHubUtilities
 
 # How to test the code
 # 1) Run the cmd: pytest tests/test_GitHub.py

@@ -1,0 +1,2 @@
+1) Fix all occurences of logging the error messages on a lower level! The errors should be passed back to the main.go
+2) Ensure that the Redis Database actually logs the URL and make sure containers are able to communicate to each other

@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"github.com/google/go-github/v59/github"
 )
@@ -18,9 +19,10 @@ import (
 const FILEPATH = "repository_links_commits.json"
 
 type GitHubUtilities struct {
-	repoName   string
-	github     *github.Client
-	comparison *github.CommitsComparison
+	RepoName   string
+	GitHub     *github.Client
+	Comparison *github.CommitsComparison
+	SavedSHA   string
 }
 
 /*
@@ -28,15 +30,15 @@ NewGitHubUtilities creates and returns a new instance of GitHubUtilities.
 
 Parameters:
 - token: A string representing the GitHub access token for authentication.
-- repoName: A string specifying the name of the GitHub repository to interact with.
+- RepoName: A string specifying the name of the GitHub repository to interact with.
 Returns: A pointer to an instance of GitHubUtilities.
 */
 func NewGitHubUtilities(token, repoName string) *GitHubUtilities {
 	client := github.NewClient(nil).WithAuthToken(token)
 
 	return &GitHubUtilities{
-		repoName: repoName,
-		github:   client,
+		RepoName: repoName,
+		GitHub:   client,
 	}
 
 }
@@ -63,14 +65,13 @@ func (g *GitHubUtilities) SetNewCommit(lastCommit string) error {
 }
 
 /*
-GetSavedSha reads and returns the last saved commit SHA from a JSON file.
+SetSavedSha reads and returns the last saved commit SHA from a JSON file.
 
 Parameters: None.
 Returns:
-- A string containing the last saved commit SHA.
 - An error if reading the file or unmarshalling JSON fails, nil otherwise.
 */
-func (g *GitHubUtilities) GetSavedSha() (string, error) {
+func (g *GitHubUtilities) SetSavedSha() error {
 	data, err := os.ReadFile(FILEPATH)
 
 	if err != nil {
@@ -83,7 +84,8 @@ func (g *GitHubUtilities) GetSavedSha() (string, error) {
 		return "", err
 	}
 
-	return dataJson["last_saved_sha"], nil
+	g.SavedSHA = dataJson["last_saved_sha"]
+	return nil
 }
 
 /*
@@ -92,11 +94,11 @@ CreateGitHubConnection establishes a connection to the specified GitHub reposito
 Parameters:
 - ctx: A context.Context object for managing cancellations and timeouts.
 Returns:
-- A pointer to a github.Repository representing the specified repository.
+- A pointer to a GitHub.Repository representing the specified repository.
 - An error if the connection or retrieval fails, nil otherwise.
 */
 func (g *GitHubUtilities) CreateGitHubConnection(ctx context.Context) (*github.Repository, error) {
-	repo, _, err := g.github.Repositories.Get(ctx, "SimplifyJobs", g.repoName)
+	repo, _, err := g.GitHub.Repositories.Get(ctx, "SimplifyJobs", g.RepoName)
 	return repo, err
 }
 
@@ -105,19 +107,33 @@ GetLastCommit retrieves the SHA of the latest commit from the default branch of 
 
 Parameters:
 - ctx: A context.Context object for managing cancellations and timeouts.
-- repo: A pointer to a github.Repository object representing the GitHub repository.
+- repo: A pointer to a GitHub.Repository object representing the GitHub repository.
 Returns:
 - A string representing the SHA of the latest commit.
 - An error if retrieving the commit fails, nil otherwise.
 */
-func (g *GitHubUtilities) GetLastCommit(ctx context.Context, repo *github.Repository) (string, error) {
-	branches, _, err := g.github.Repositories.ListBranches(ctx, repo.GetOwner().GetLogin(), repo.GetName(), nil)
+func (g *GitHubUtilities) GetLastCommit(
+	ctx context.Context,
+	repo *github.Repository,
+) (string, error) {
+	branches, _, err := g.GitHub.Repositories.ListBranches(
+		ctx,
+		repo.GetOwner().GetLogin(),
+		repo.GetName(),
+		nil,
+	)
 	if err != nil {
 		return "", err
 	}
 
 	branchName := branches[0].GetName()
-	mainBranch, _, err := g.github.Repositories.GetBranch(ctx, repo.GetOwner().GetLogin(), repo.GetName(), branchName, 0)
+	mainBranch, _, err := g.GitHub.Repositories.GetBranch(
+		ctx,
+		repo.GetOwner().GetLogin(),
+		repo.GetName(),
+		branchName,
+		0,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -130,33 +146,38 @@ SetComparison sets the comparison field of the GitHubUtilities struct by compari
 
 Parameters:
 - ctx: A context.Context object for managing cancellations and timeouts.
-- repo: A pointer to a github.Repository object representing the GitHub repository.
+- repo: A pointer to a GitHub.Repository object representing the GitHub repository.
 Returns: An error if the comparison fails, nil otherwise.
 */
-func (g *GitHubUtilities) SetComparison(ctx context.Context, repo *github.Repository) error {
+func (g *GitHubUtilities) SetComparison(
+	ctx context.Context,
+	repo *github.Repository,
+) error {
 	recentCommitSha, err := g.GetLastCommit(ctx, repo)
 	if err != nil {
 		return err
 	}
 
-	previousCommitSha, err := g.GetSavedSha()
+	comparison, _, err := g.GitHub.Repositories.CompareCommits(
+		ctx,
+		repo.GetOwner().GetLogin(),
+		repo.GetName(),
+		g.SavedSHA,
+		recentCommitSha,
+		nil,
+	)
 	if err != nil {
 		return err
 	}
 
-	comparison, _, err := g.github.Repositories.CompareCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), previousCommitSha, recentCommitSha, nil)
-	if err != nil {
-		return err
-	}
-
-	g.comparison = comparison
+	g.Comparison = comparison
 	return nil
 
 }
 
 /* ClearComparison clears the comparison field of the GitHubUtilities struct. */
 func (g *GitHubUtilities) ClearComparison() {
-	g.comparison = nil
+	g.Comparison = nil
 }
 
 /*
@@ -168,37 +189,40 @@ Returns:
 - A boolean indicating whether the given commit SHA is new (true) or not (false).
 - An error if retrieving the saved commit SHA fails, nil otherwise.
 */
-func (g *GitHubUtilities) IsNewCommit(lastCommit string) (bool, error) {
-	commitSha, err := g.GetSavedSha()
-	if err != nil {
-		return false, err
+func (g *GitHubUtilities) IsNewCommit(lastCommitSHA string) bool {
+	if err := g.SetSavedSha(); err != nil {
+		return err
 	}
-	return lastCommit != commitSha, nil
+	return lastCommitSHA != g.SavedSHA
 }
 
-// Create getCommitChanges Later once Generator is Figured out!
-/*
-   def getCommitChanges(self, readme_file: str) -> Iterable[str]:
-       """
-       Retrieve the commit changes that make additions to the .md files
+func (g *GitHubUtilities) GetCommitChanges(readmeFile string) <-chan string {
+	channel := make(chan string)
 
-       Parameters:
-           - readme_file: The name of the .md file
-       Returns:
-           - Iterable[str]: The lines that contain the job postings
-       """
-       if self.comparison is None:
-           return []
+	go func() {
+		defer close(channel)
 
-       for file in self.comparison.files:
-           if file.filename == readme_file:
-               commit_lines = file.patch.split("\n") if file.patch else []
-               for line in commit_lines:
-                   # Check if the line is an addition and not a file header or subtraction
-                   if (
-                       line.startswith("+")
-                       and not line.startswith("+++")
-                       and "🔒" not in line
-                   ):
-                       yield line
-*/
+		if g.Comparison == nil {
+			return
+		}
+
+		for _, file := range g.Comparison.Files {
+			if file.GetFilename() == readmeFile {
+				commitAdditions := file.GetPatch()
+				if commitAdditions == "" {
+					continue
+				}
+				commitLines := strings.Split(commitAdditions, "\n")
+				for _, line := range commitLines {
+					if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") &&
+						!strings.Contains(line, "🔒") {
+						channel <- line
+					}
+				}
+				break
+			}
+		}
+	}()
+
+	return channel
+}
