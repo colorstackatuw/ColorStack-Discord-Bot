@@ -1,6 +1,7 @@
 package Utilities
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/redis/go-redis/v9"
 )
 
 type InternshipUtilities struct {
@@ -133,6 +135,7 @@ func (iu *InternshipUtilities) GetInternships(
 	channels []string,
 	jobPostingChannel <-chan string,
 	isSummer bool,
+	redisClient *redis.Client,
 ) {
 
 	// Determine the index of the job link
@@ -141,6 +144,7 @@ func (iu *InternshipUtilities) GetInternships(
 	if !isSummer {
 		jobLinkIndex = 5
 	}
+	var ctx = context.Background()
 
 	for job := range jobPostingChannel {
 		var companyName, jobTitle, jobLink, terms, location string
@@ -170,6 +174,10 @@ func (iu *InternshipUtilities) GetInternships(
 		jobLink = matches[1]
 		if _, exists := iu.JobCache[jobLink]; exists {
 			continue
+		}
+
+		if _, err := redisClient.Get(ctx, jobLink).Result(); err != nil {
+			//! Add logger here!
 		}
 		iu.JobCache[jobLink] = struct{}{}
 
@@ -255,6 +263,11 @@ func (iu *InternshipUtilities) GetInternships(
 			datePosted, companyName, jobTitle, location, terms, jobLink,
 		)
 		iu.TotalJobs++
+
+		// Update the Redis Database
+		if err := redisClient.Set(ctx, jobLink, "", 0).Err(); err != nil {
+			// ! Add proper log here	
+		}
 
 		//Work on concurrent posts
 		wg := sync.WaitGroup{}

@@ -1,4 +1,4 @@
-package main
+package 
 
 import (
 	"ColorStack-Discord-Bot/Utilities"
@@ -10,7 +10,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func main() {
+func main1() {
 
 	// Testing for GitHub applications
 	ctx := context.Background()

@@ -75,13 +75,13 @@ func (g *GitHubUtilities) SetSavedSha() error {
 	data, err := os.ReadFile(FILEPATH)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	var dataJson map[string]string
 	err = json.Unmarshal(data, &dataJson)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	g.SavedSHA = dataJson["last_saved_sha"]
@@ -191,7 +191,7 @@ Returns:
 */
 func (g *GitHubUtilities) IsNewCommit(lastCommitSHA string) bool {
 	if err := g.SetSavedSha(); err != nil {
-		return err
+		return false
 	}
 	return lastCommitSHA != g.SavedSHA
 }

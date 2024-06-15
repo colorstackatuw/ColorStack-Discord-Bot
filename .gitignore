@@ -13,4 +13,4 @@ __pycache__/
 .env
 
 commits/repository_links_commits.json
-src/Utilities/dbconnector.go
+src/Utilities/DBConnector.go
