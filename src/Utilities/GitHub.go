@@ -14,9 +14,10 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v59/github"
+	"github.com/pkg/errors"
 )
 
-const FILEPATH = "repository_links_commits.json"
+const FILEPATH = "src/repository_links_commits.json"
 
 type GitHubUtilities struct {
 	RepoName   string
@@ -57,11 +58,15 @@ func (g *GitHubUtilities) SetNewCommit(lastCommit string) error {
 
 	data, err := json.Marshal(dataJson)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Couldn't parse data")
 	}
 
 	err = os.WriteFile(FILEPATH, data, 0644)
-	return err
+	if err != nil {
+		return errors.Wrap(err, "Couldn't write to file!")
+	}
+
+	return nil
 }
 
 /*
@@ -73,15 +78,14 @@ Returns:
 */
 func (g *GitHubUtilities) SetSavedSha() error {
 	data, err := os.ReadFile(FILEPATH)
-
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Can't Read file")
 	}
 
 	var dataJson map[string]string
 	err = json.Unmarshal(data, &dataJson)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Can't unwrap data")
 	}
 
 	g.SavedSHA = dataJson["last_saved_sha"]
@@ -99,7 +103,7 @@ Returns:
 */
 func (g *GitHubUtilities) CreateGitHubConnection(ctx context.Context) (*github.Repository, error) {
 	repo, _, err := g.GitHub.Repositories.Get(ctx, "SimplifyJobs", g.RepoName)
-	return repo, err
+	return repo, errors.Wrap(err, "Failed to connect")
 }
 
 /*
@@ -123,7 +127,7 @@ func (g *GitHubUtilities) GetLastCommit(
 		nil,
 	)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "Couldn't get all the branches")
 	}
 
 	branchName := branches[0].GetName()
@@ -135,7 +139,7 @@ func (g *GitHubUtilities) GetLastCommit(
 		0,
 	)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "Could not retrieve the main branch")
 	}
 
 	return mainBranch.Commit.GetSHA(), nil
@@ -155,7 +159,7 @@ func (g *GitHubUtilities) SetComparison(
 ) error {
 	recentCommitSha, err := g.GetLastCommit(ctx, repo)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Can't find last commit")
 	}
 
 	comparison, _, err := g.GitHub.Repositories.CompareCommits(
@@ -167,7 +171,7 @@ func (g *GitHubUtilities) SetComparison(
 		nil,
 	)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Can't make the commit comparisons")
 	}
 
 	g.Comparison = comparison

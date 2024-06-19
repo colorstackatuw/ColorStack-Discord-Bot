@@ -6,7 +6,6 @@ services:
     container_name: ColorStackBot
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN}
-      CHANNEL_ID: ${CHANNEL_ID}
       GIT_TOKEN: ${GIT_TOKEN}
     volumes:
       - ./commits:/app/commits

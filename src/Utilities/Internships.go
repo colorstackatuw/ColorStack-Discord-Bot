@@ -3,6 +3,7 @@ package Utilities
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -162,8 +163,8 @@ func (iu *InternshipUtilities) GetInternships(
 		// If job link is already in cache, we skip the job
 		re, err := regexp.Compile(`href="([^"]+)"`)
 		if err != nil {
-			fmt.Println("Regex compile error:", err) //! Add proper stacktrack error
-			return
+			log.Print("There is no job link within the job posting")
+			continue
 		}
 
 		matches := re.FindStringSubmatch(nonEmptyElements[jobLinkIndex])
@@ -177,7 +178,7 @@ func (iu *InternshipUtilities) GetInternships(
 		}
 
 		if _, err := redisClient.Get(ctx, jobLink).Result(); err != nil {
-			//! Add logger here!
+			log.Panic("Unable to connect to the Redis Database!")
 		}
 		iu.JobCache[jobLink] = struct{}{}
 
@@ -202,7 +203,7 @@ func (iu *InternshipUtilities) GetInternships(
 		layout := "Jan 02 2006"
 		jobDate, err := time.Parse(layout, formatedDate)
 		if err != nil {
-			panic(err) // ! Add proper stack trace
+			log.Panic(err)
 		}
 
 		if !iu.IsWithinDateRange(jobDate) {
@@ -266,7 +267,7 @@ func (iu *InternshipUtilities) GetInternships(
 
 		// Update the Redis Database
 		if err := redisClient.Set(ctx, jobLink, "", 0).Err(); err != nil {
-			// ! Add proper log here	
+			log.Panic("Unable to upage the Redis Database!")
 		}
 
 		//Work on concurrent posts
@@ -275,7 +276,9 @@ func (iu *InternshipUtilities) GetInternships(
 			wg.Add(1)
 			go func(ch string) {
 				defer wg.Done()
-				discordBot.ChannelMessageSend(ch, post)
+				if _, err := discordBot.ChannelMessageSend(ch, post); err != nil {
+					log.Panic(err)
+				}
 			}(channel)
 		}
 		wg.Wait()

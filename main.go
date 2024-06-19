@@ -13,17 +13,19 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/pkgerrors"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
 	discordToken string
 	githubToken  string
 	mutex        sync.Mutex
-	logger       *zerolog.Logger
+	logger       zerolog.Logger
 	redisClient  *redis.Client
 	ctx          context.Context
-	db 			 *Utilities.DatabaseConnector
-	bot 		 *discordgo.Session
+	db           *Utilities.DatabaseConnector
+	bot          *discordgo.Session
 )
 
 /*
@@ -33,6 +35,19 @@ Parameters: None.
 Returns: None.
 */
 func init() {
+
+	// Create the logger and location
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+	lj := &lumberjack.Logger{
+		Filename:   "logs/discord_bot.log",
+		MaxSize:    10,
+		MaxBackups: 3,
+		MaxAge:     28,
+		Compress:   true,
+	}
+
+	// Create a new zerolog logger with the lumberjack logger as the output
+	logger = zerolog.New(lj).With().Timestamp().Logger()
 	if err := godotenv.Load(); err != nil {
 		logger.Fatal().Err(err).Msg("Error loading the .env files")
 	}
@@ -64,7 +79,7 @@ Returns: None.
 func main() {
 	bot, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
-		logger.Error().Stack().Msg("error creating Discord session")
+		logger.Error().Stack().Err(err).Msg("error creating Discord session")
 	}
 
 	bot.AddHandler(onGuildJoin)
@@ -73,19 +88,19 @@ func main() {
 
 	err = bot.Open()
 	if err != nil {
-		logger.Error().Stack().Msg("error opening connection")
+		logger.Error().Stack().Err(err).Msg("error opening connection")
 	}
 
 	// Shut down bot when there is CTRL-C or OS interruption
 	defer bot.Close()
 
-    // Wait here until CTRL-C or other term signal is received
-    logger.Info().Msg("Bot is now running. Press CTRL+C to exit.")
-    stop := make(chan os.Signal, 1)
-    signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-    <-stop
+	// Wait here until CTRL-C or other term signal is received
+	logger.Info().Msg("Bot is now running. Press CTRL+C to exit.")
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	<-stop
 
-    logger.Info().Msg("Shutting down...")
+	logger.Info().Msg("Shutting down...")
 }
 
 /*
@@ -100,7 +115,10 @@ Returns: None.
 func onReady(s *discordgo.Session, event *discordgo.Ready) {
 	logger.Info().Str("Username", s.State.User.Username).Msg("Logged In")
 
-	githubUtilities := Utilities.NewGitHubUtilities(githubToken, "SimplifyJobs/Summer2024-Internships")
+	githubUtilities := Utilities.NewGitHubUtilities(
+		githubToken,
+		"Summer2024-Internships",
+	)
 	internshipUtilities := Utilities.NewInternshipUtilities(true)
 
 	// Start the tasks
@@ -123,7 +141,11 @@ func onGuildJoin(s *discordgo.Session, event *discordgo.GuildCreate) {
 		logger.Info().Msg("The bot joined a new server!")
 		db := Utilities.NewDatabaseConnector()
 
-		channel, err := s.GuildChannelCreate(event.Guild.ID, "opportunities-bot", discordgo.ChannelTypeGuildText)
+		channel, err := s.GuildChannelCreate(
+			event.Guild.ID,
+			"opportunities-bot",
+			discordgo.ChannelTypeGuildText,
+		)
 		if err != nil {
 			logger.Error().
 				Stack().
@@ -132,6 +154,7 @@ func onGuildJoin(s *discordgo.Session, event *discordgo.GuildCreate) {
 				Msg("Could not create a channel named 'opportunities-bot'")
 			if err := s.GuildLeave(event.Guild.ID); err != nil {
 				logger.Error().
+					Stack().
 					Err(err).
 					Str("guild", event.Guild.Name).
 					Msg("Failed to leave guild after failing to create channel")
@@ -140,12 +163,12 @@ func onGuildJoin(s *discordgo.Session, event *discordgo.GuildCreate) {
 		}
 		db.WriteChannel(event.Guild, channel)
 		if _, err := s.ChannelMessageSend(channel.ID, "Hello! I am the ColorStack Bot. I will be posting new job opportunities here."); err != nil {
-			logger.Error().Err(err).Str("channel", channel.ID).Msg("Failed to send welcome message")
+			logger.Error().Stack().Err(err).Str("channel", channel.ID).Msg("Failed to send welcome message")
 		}
 	} else {
 		logger.Info().Msg("We have reached max capacity of 20 servers!")
 		if err := s.GuildLeave(event.Guild.ID); err != nil {
-			logger.Error().Err(err).Str("guild", event.Guild.Name).Msg("Failed to leave guild after reaching capacity")
+			logger.Error().Stack().Err(err).Str("guild", event.Guild.Name).Msg("Failed to leave guild after reaching capacity")
 		}
 	}
 }
@@ -163,7 +186,10 @@ func onGuildRemove(s *discordgo.Session, event *discordgo.GuildDelete) {
 	defer mutex.Unlock()
 
 	logger.Info().Str("Guild", event.Guild.ID).Msg("The bot has been removed from a server")
-	db.DeleteServer(event.Guild)
+	if err := db.DeleteServer(event.Guild); err != nil {
+		logger.Error().Stack().Err(err).Msgf("Couldn't remove server from database: %s", event.Guild.Name)
+	}
+
 }
 
 /*
@@ -183,15 +209,14 @@ func scheduledTask(
 	// Open Connection
 	repo, err := githubUtilities.CreateGitHubConnection(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create GitHub connection")
+		logger.Fatal().Stack().Err(err).Msg("Failed to create GitHub connection")
 	}
 
 	for range time.Tick(60 * time.Second) {
 		startTime := time.Now()
-
 		lastCommitSHA, err := githubUtilities.GetLastCommit(ctx, repo)
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to get last saved commit SHA")
+			logger.Error().Stack().Err(err).Msg("Failed to get last saved commit SHA")
 			continue
 		}
 
@@ -201,23 +226,35 @@ func scheduledTask(
 
 			channelIDs, err := db.GetChannels()
 			if err != nil {
-				logger.Error().Err(err).Msg("Failed to get channel IDs")
+				logger.Error().Stack().Err(err).Msg("Failed to get channel IDs")
 			}
 
 			var isCoop, isSummer bool
 
 			if isCoop {
 				jobPostings := githubUtilities.GetCommitChanges("README-Off-Season.md")
-				internshipUtilities.GetInternships(bot, channelIDs[:20], jobPostings, false, redisClient)
+				internshipUtilities.GetInternships(
+					bot,
+					channelIDs[:20],
+					jobPostings,
+					false,
+					redisClient,
+				)
 			}
 
 			if isSummer {
 				jobPostings := githubUtilities.GetCommitChanges("README.md")
-				internshipUtilities.GetInternships(bot, channelIDs[:20], jobPostings, true, redisClient)
+				internshipUtilities.GetInternships(
+					bot,
+					channelIDs[:20],
+					jobPostings,
+					true,
+					redisClient,
+				)
 			}
 
 			if err := githubUtilities.SetNewCommit(lastCommitSHA); err != nil {
-				logger.Error().Err(err).Msg("Failed to set the new commit")
+				logger.Error().Stack().Err(err).Msg("Failed to set the new commit")
 			}
 
 			logger.Info().Int("total_jobs", internshipUtilities.TotalJobs).Msg("New jobs found!")
@@ -232,7 +269,7 @@ func scheduledTask(
 		}
 
 		endTime := time.Now()
-		executionTime := endTime.Sub(startTime)
-		logger.Info().Dur("execution_time", executionTime).Msg("Task execution time")
+		executionTime := endTime.Sub(startTime).Seconds()
+		logger.Info().Float64("Execution Time:", executionTime).Msg("End of Task")
 	}
 }

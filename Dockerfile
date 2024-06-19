@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM golang:latest  
+FROM golang:1.22.4
 
 # Set the working directory in the container to /app
 WORKDIR /app
@@ -14,13 +14,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy the current directory contents into the container at /app
-COPY . .
-
-# Change the working directory to /app/src where DiscordBot.py is located
-WORKDIR /app/src
+COPY . . 
 
 # Build the Go application
-RUN go build -o DiscordBot ./src
+RUN go build -o main . 
 
-# Run DiscordBot.py when the container launches
-CMD ["./DiscordBot"]
+# Run Main the container launches
+CMD ["./main"]
