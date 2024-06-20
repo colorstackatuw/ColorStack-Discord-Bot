@@ -7,7 +7,7 @@
 - [Classes](#classes)
   - [DiscordBot](#discordbot)
   - [GitHubUtilities](#githubutilities)
-  - [InternshipUtilities](#internshiputilities)
+  - [JobsUtilities](#JobsUtilities)
   - [DatabaseConnector](#databaseconnector)
 
 ## Installation
@@ -40,8 +40,8 @@ A scheduled task that runs every 60 seconds to check for new commits in the GitH
 
 | Parameter              | Description                                                                                                                                                  |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `github_utilities`     | An instance of the `GitHubUtilities` class, enabling the bot to connect to the GitHub API and scrape GitHub repositories                                     |
-| `internship_utilities` | An instance of the `InternshipUtilities` class, allowing the bot to scrape GitHub repositories and post opportunities to the Discord server every 60 seconds |
+| `job_utilities`     | An instance of the `GitHubUtilities` class, enabling the bot to connect to the GitHub API and scrape GitHub repositories                                     |
+| `internship_github` | An instance of the `JobsUtilities` class, allowing the bot to scrape GitHub repositories and post opportunities to the Discord server every 60 seconds |
 
 ### on_guild_remove
 
@@ -133,13 +133,13 @@ Determine if there is a new commit on the GitHub repository.
 
 Retrieve the commit changes that make additions to the Markdown files.
 
-## InternshipUtilities
+## JobsUtilities
 
 This class scrapes the GitHub repositories, processes the opportunities, and posts the opportunities in the Discord server every 60 seconds.
 
-### InternshipUtilities Constructor
+### JobsUtilities Constructor
 
-This method initializes the InternshipUtilities class with the specified GitHub repository and the Discord bot.
+This method initializes the JobsUtilities class with the specified GitHub repository and the Discord bot.
 
 | Parameter | Description                             |
 | --------- | --------------------------------------- |

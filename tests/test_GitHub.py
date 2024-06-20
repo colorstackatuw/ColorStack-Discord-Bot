@@ -9,7 +9,7 @@ from src.GitHubUtilities import GitHubUtilities
 def test_create_github_connection(mock_getenv):
     # Arrange
     mock_getenv.return_value = 'mock_token'
-    repo_name = "SimplifyJobs/Summer2024-Internships"
+    repo_name = "SimplifyJobs/Summer2025-Internships"
     utilities = GitHubUtilities('mock_token', repo_name)
 
     # Act
@@ -44,8 +44,8 @@ def test_is_new_commit(mock_repo):
 
 
 @pytest.fixture
-def setup_github_utilities():
+def setup_job_utilities():
     token = "your_token"
-    repo_name = "SimplifyJobs/Summer2024-Internships"
+    repo_name = "SimplifyJobs/Summer2025-Internships"
     utilities = GitHubUtilities(token, repo_name)
     return utilities

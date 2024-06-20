@@ -15,12 +15,12 @@ with patch.dict(
         "discord.ext.commands": MagicMock(),
     },
 ):
-    from src.InternshipUtilities import InternshipUtilities
+    from src.JobsUtilities import JobsUtilities
 
 
 def test_is_within_date_range():
     # Arrange
-    internship_util = InternshipUtilities(True, False)
+    internship_util = JobsUtilities()
     random_days = random.randint(1, 6)
     job_date = datetime.now() - timedelta(days=random_days)
     current_date = datetime.now()
@@ -34,7 +34,7 @@ def test_is_within_date_range():
 
 def test_save_company_name():
     # Arrange
-    internship_util = InternshipUtilities(True, False)
+    internship_util = JobsUtilities()
     company_name = "Test Company"
 
     # Act
@@ -63,7 +63,7 @@ async def test_valid_job_posting():
     current_date = datetime(2024, 1, 8)
 
     # Create an instance of your class
-    instance = InternshipUtilities(summer=True, coop=True)
+    instance = JobsUtilities()
     instance.saveCompanyName = MagicMock()
     instance.isWithinDateRange = MagicMock(return_value=True)
     instance.previous_job_title = ""

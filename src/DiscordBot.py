@@ -21,7 +21,7 @@ from DatabaseConnector import DatabaseConnector
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from GitHubUtilities import GitHubUtilities
-from InternshipUtilities import InternshipUtilities
+from JobsUtilities import JobsUtilities
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -52,45 +52,74 @@ bot = commands.Bot(command_prefix="$", intents=intents)
 
 
 @tasks.loop(seconds=60)
-async def scheduled_task(github_utilities: GitHubUtilities, internship_utilities: InternshipUtilities):
+async def scheduled_task(internship_github: GitHubUtilities, newgrad_github: GitHubUtilities, job_utilities: JobsUtilities):
     """
     A scheduled task that runs every 60 seconds to check for new commits in the GitHub repository.
 
     Parameters:
-        - github_utilities: The GitHubUtilities object
-        - internship_utilities: The InternshipUtilities object
+        - internship_github: Internship object
+        - newgrad_github: New Grad GitHubUtilities object
+        - job_utilities: The JobsUtilities object
     """
     async with lock:
         try:
             start_time = datetime.now()
-            repo = github_utilities.createGitHubConnection()
-            last_saved_commit = github_utilities.getSavedSha(repo)
 
-            if github_utilities.isNewCommit(repo, last_saved_commit):
-                logger.info("New commit has been found. Finding new jobs...")
-                github_utilities.setComparison(repo)  # Get the comparison file
+            internship_repo = internship_github.createGitHubConnection()
+            internship_sha = internship_github.getSavedSha(internship_repo, False)
+            newgrad_repo = newgrad_github.createGitHubConnection()
+            newgrad_sha = newgrad_github.getSavedSha(newgrad_repo, True) 
+
+            # Process all internship 
+            if internship_github.isNewCommit(internship_repo, internship_sha):
+                logger.info("New internship commit has been found. Finding new jobs...")
+                internship_github.setComparison(internship_repo, False)  
 
                 # Get the channels to send the job postings
                 db = DatabaseConnector()
                 channel_ids = db.getChannels()
 
-                if internship_utilities.is_coop:
-                    job_postings = github_utilities.getCommitChanges("README-Off-Season.md")
-                    await internship_utilities.getInternships(bot, channel_ids[:20], job_postings, start_time, False)
+                if internship_github.is_coop:
+                    job_postings = internship_github.getCommitChanges("README-Off-Season.md")
+                    await job_utilities.getJobs(bot, channel_ids[:20], job_postings, "Co-Op")
 
-                if internship_utilities.is_summer:
-                    job_postings = github_utilities.getCommitChanges("README.md")
-                    await internship_utilities.getInternships(bot, channel_ids[:20], job_postings, start_time, True)
+                if internship_github.is_summer:
+                    job_postings = internship_github.getCommitChanges("README.md")
+                    await job_utilities.getJobs(bot, channel_ids[:20], job_postings, "Summer")
 
-                github_utilities.setNewCommit(github_utilities.getLastCommit(repo))
-                logger.info(f"There were {internship_utilities.total_jobs} new jobs found!")
+                sha_commit = internship_github.getLastCommit(internship_repo)
+                internship_github.setNewCommit(sha_commit, False)
+                logger.info(f"There were {job_utilities.total_jobs} new jobs found!")
 
                 # Clear all the cached data
-                internship_utilities.clearJobLinks()
-                internship_utilities.clearJobCounter()
-                github_utilities.clearComparison()
+                job_utilities.clearJobLinks()
+                job_utilities.clearJobCounter()
+                internship_github.clearComparison()
 
-                logger.info("All jobs have been posted!")
+                logger.info("All internship jobs have been posted!")
+
+            # Process all new gradjobs
+            if newgrad_github.isNewCommit(newgrad_repo, newgrad_sha):
+                logger.info("New grad commit has been found. Finding new jobs...")
+                newgrad_github.setComparison(newgrad_repo, True)  
+
+                # Get the channels to send the job postings
+                db = DatabaseConnector()
+                channel_ids = db.getChannels()
+                job_postings = newgrad_github.getCommitChanges("README.md")
+                await job_utilities.getJobs(bot, channel_ids[:20], job_postings, "New Grad")
+
+                sha_commit = newgrad_github.getLastCommit(newgrad_repo)
+                newgrad_github.setNewCommit(sha_commit, True)
+                logger.info(f"There were {job_utilities.total_jobs} new jobs found!")
+
+                # Clear all the cached data
+                job_utilities.clearJobLinks()
+                job_utilities.clearJobCounter()
+                newgrad_github.clearComparison()
+
+                logger.info("All new grad jobs have been posted!")
+
         except Exception:
             logger.error("An error occurred in the scheduled task.", exc_info=True)
             await bot.close()
@@ -154,9 +183,10 @@ async def on_ready():
     """
     logger.info(f"Logged in as {bot.user.name}")
 
-    github_utilities = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/Summer2024-Internships")
-    internship_utilities = InternshipUtilities(summer=True, coop=True)
-    scheduled_task.start(github_utilities, internship_utilities)  # Start the loop
+    github_internship = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/Summer2025-Internships", isSummer=True, isCoop=True)
+    github_newgrad = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/New-Grad-Positions") 
+    job_utilities = JobsUtilities()
+    scheduled_task.start(github_internship, github_newgrad, job_utilities)  # Start the loop
 
 
 if __name__ == "__main__":

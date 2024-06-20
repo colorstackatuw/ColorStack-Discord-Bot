@@ -8,23 +8,20 @@ Prerequisites:
 - Discord: A Python library to interact with the Discord API
 - A GitHub personal access token with the necessary permissions.
 """
+
 import asyncio
 import logging
 import re
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import discord
 
 
-class InternshipUtilities:
-    FILEPATH = Path("../commits/repository_links_commits.json") 
+class JobsUtilities:
     NOT_US = ["canada", "uk", "united kingdom", "eu"]
 
-    def __init__(self, summer: bool, coop: bool):
-        self.is_summer = summer
-        self.is_coop = coop
+    def __init__(self):
         self.previous_job_title = ""
         self.job_cache = set()
         self.total_jobs = 0
@@ -62,28 +59,31 @@ class InternshipUtilities:
         """
         self.previous_job_title = company_name
 
-    async def getInternships(
+    async def getJobs(
         self,
         bot: discord.ext.commands.Bot,
         channels: list[int],
         job_postings: Iterable[str],
-        current_date: datetime,
-        is_summer: bool,
+        term: str,
     ) -> None:
         """
-        Retrieve the Summer or Co-op internships from the GitHub repository.
+        Retrieve the job postings from the GitHub repository.
 
         Parameters:
             - bot: The Discord bot.
-            - channels: All the channels to send the job postings to 
+            - channels: All the channels to send the job postings to
             - job_postings: The list of job postings.
-            - current_date: The current date.
-            - is_summer: A boolean to record a job if it's summer or co-op internships.
+            - term: Timeline of the job posting
         """
+        if term not in ["Summer", "Co-Op", "New Grad"]:
+            raise ValueError("Term must be one of these: Summer, Coop, NewGrad")
+
         try:
+            current_date = datetime.now()
+            has_printed = False
             for job in job_postings:
                 # Determine the index of the job link
-                job_link_index = 4 if is_summer else 5
+                job_link_index = 5 if term == "Co-Op" else 4
 
                 # Grab the data and remove the empty elements
                 non_empty_elements = [element.strip() for element in job.split("|") if element.strip()]
@@ -157,22 +157,24 @@ class InternshipUtilities:
                     continue
 
                 job_title = non_empty_elements[2]
-
-                if is_summer:
-                    terms = "Summer" + " " + str(current_year)
-                else:
+                if term == "Co-Op":
                     terms = " |".join(non_empty_elements[4].split(","))
+                elif term == "Summer":
+                    terms = "Summer" + " " + str(current_year)
 
-                post = (
+                if not has_printed:
+                    post = f"{'-' * 153}\n" f"# {term} Posting!\n\n"
+                    has_printed = True
+
+                post += (
                     f"**📅 Date Posted:** {date_posted}\n"
                     f"**ℹ️ Company:** {company_name}\n"
                     f"**👨‍💻 Job Title:** {job_title}\n"
                     f"**📍 Location:** {location}\n"
-                    f"**➡️  When?:**  {terms}\n"
-                    f"\n"
-                    f"**👉 Job Link:** {job_link}\n"
-                    f"\n\n\n"
                 )
+                if term != "New Grad":
+                    post += f"**➡️  When?:**  {terms}\n"
+                post += f"\n" f"**👉 Job Link:** <{job_link}>\n"
                 self.total_jobs += 1
 
                 # Send the job posting to the Discord channel

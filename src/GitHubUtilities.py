@@ -20,7 +20,9 @@ from github import Auth, Github
 class GitHubUtilities:
     FILEPATH = Path("../commits/repository_links_commits.json")
 
-    def __init__(self, token, repo_name):
+    def __init__(self, token, repo_name, isSummer: bool = False, isCoop = False):
+        self.is_summer = isSummer 
+        self.is_coop = isCoop
         self.repo_name = repo_name
         self.github = Github(auth=Auth.Token(token))
         self.comparison = None
@@ -34,17 +36,19 @@ class GitHubUtilities:
         """
         return self.github.get_repo(self.repo_name)
 
-    def setNewCommit(self, last_commit: str) -> None:
+    def setNewCommit(self, last_commit: str, isNewGrad: True) -> None:
         """
         Save the last commit information to prevent duplicate job postings
 
         Parameters:
             - last_commit: The last saved commit sha from `commits/repository_links_commits.json`
+            - isNewGrad: True if commit is for repo
         """
+        key = "last_saved_sha_newgrad" if isNewGrad else "last_saved_sha_internship"
         with self.FILEPATH.open("r") as file:
             data_json = json.load(file)
 
-        data_json["last_saved_sha"] = last_commit
+        data_json[key] = last_commit
 
         with self.FILEPATH.open("w") as file:
             json.dump(data_json, file)
@@ -58,20 +62,22 @@ class GitHubUtilities:
         Returns:
             - str: The last commit hexadecimal information on Github repository
         """
-        branch = repo.get_branches()[0]  # May need to be changed in future
+        branch = repo.get_branch(branch="dev")  # May need to be changed in future
         return branch.commit.sha
 
-    def getSavedSha(self, repo: github.Repository.Repository) -> str:
+    def getSavedSha(self, repo: github.Repository.Repository, isNewGrad: bool) -> str:
         """
         Retrieve the last commit information from the saved file
 
         Parameters:
             - repo: The GitHub repository
+            - isNewGrad: True if getting new grad sha
         Returns:
             - str: The last commit hexadecimal information
         """
+        key = "last_saved_sha_newgrad" if isNewGrad else "last_saved_sha_internship"
         with self.FILEPATH.open("r") as file:
-            commit_sha = json.load(file)["last_saved_sha"]
+            commit_sha = json.load(file)[key]
 
         if not commit_sha:
             # If the file is empty, get the previous commit from the repository
@@ -81,18 +87,19 @@ class GitHubUtilities:
         else:
             return commit_sha
 
-    def setComparison(self, repo: github.Repository.Repository) -> None:
+    def setComparison(self, repo: github.Repository.Repository, isNewGrad: bool) -> None:
         """
         Set the comparison between the previous commit and the recent commit
 
         Parameters:
             - repo: The GitHub repository
+            - isNewGrad: True if repo is for new grad 
         """
         recent_commit = self.getLastCommit(repo)
         if not recent_commit:
             self.comparison = None
 
-        previous_commit = self.getSavedSha(repo)  # Get the saved commit
+        previous_commit = self.getSavedSha(repo, isNewGrad)  # Get the saved commit
         comparison = repo.compare(base=previous_commit, head=recent_commit)
         self.comparison = comparison
 
