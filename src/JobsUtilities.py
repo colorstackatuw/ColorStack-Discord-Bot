@@ -161,20 +161,21 @@ class JobsUtilities:
                     terms = " |".join(non_empty_elements[4].split(","))
                 elif term == "Summer":
                     terms = "Summer" + " " + str(current_year)
-
+                
+                post = ""
                 if not has_printed:
-                    post = f"{'-' * 153}\n" f"# {term} Posting!\n\n"
+                    post += f"# {term} Postings!\n\n"
                     has_printed = True
 
                 post += (
                     f"**📅 Date Posted:** {date_posted}\n"
-                    f"**ℹ️ Company:** {company_name}\n"
+                    f"**ℹ️ Company:** __{company_name}__\n"
                     f"**👨‍💻 Job Title:** {job_title}\n"
                     f"**📍 Location:** {location}\n"
                 )
                 if term != "New Grad":
                     post += f"**➡️  When?:**  {terms}\n"
-                post += f"\n" f"**👉 Job Link:** <{job_link}>\n"
+                post += f"**👉 Job Link:** <{job_link}>\n" f"{'-' * 153}"
                 self.total_jobs += 1
 
                 # Send the job posting to the Discord channel

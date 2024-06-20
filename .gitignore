@@ -9,4 +9,5 @@ __pycache__/
 # Environment variables
 .env
 
+commits/repository_links_commits.json
 src/DatabaseConnector.py
