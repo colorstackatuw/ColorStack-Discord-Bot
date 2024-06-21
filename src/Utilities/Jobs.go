@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 )
 
-type InternshipUtilities struct {
-	IsSummer         bool
+type JobUtilities struct {
 	PreviousJobTitle string
 	JobCache         map[string]struct{}
 	TotalJobs        int
@@ -23,16 +23,15 @@ type InternshipUtilities struct {
 }
 
 /*
-NewInternshipUtilities creates and returns a new instance of InternshipUtilities.
+NewJobUtilities creates and returns a new instance of JobUtilities.
 It initializes the JobCache and sets the IsSummer flag based on the provided summer parameter.
 
 Parameters:
 - summer: Determines if the utility is for summer internships.
-Returns: A pointer to the newly created InternshipUtilities instance.
+Returns: A pointer to the newly created JobUtilities instance.
 */
-func NewInternshipUtilities(summer bool) *InternshipUtilities {
-	return &InternshipUtilities{
-		IsSummer: summer,
+func NewJobUtilities() *JobUtilities {
+	return &JobUtilities{
 		JobCache: make(map[string]struct{}),
 		NotUS:    [4]string{"canada", "uk", "united kingdom", "eu"},
 	}
@@ -43,7 +42,7 @@ ClearJobLinks resets the JobCache map to an empty state.
 
 This method does not take parameters or return any value.
 */
-func (iu *InternshipUtilities) ClearJobLinks() {
+func (iu *JobUtilities) ClearJobLinks() {
 	iu.JobCache = make(map[string]struct{})
 }
 
@@ -52,45 +51,8 @@ ClearJobCounter sets the TotalJobs counter to 0.
 
 This method does not take parameters or return any value.
 */
-func (iu *InternshipUtilities) ClearJobCounter() {
+func (iu *JobUtilities) ClearJobCounter() {
 	iu.TotalJobs = 0
-}
-
-/*
-IsWithinDateRange checks if a given jobDate is within 3 days before the currentDate.
-
-Parameters:
-- jobDate: The date of the job posting.
-- currentDate: The current date for comparison.
-Returns: True if jobDate is within 3 days before currentDate, false otherwise.
-*/
-func (iu *InternshipUtilities) IsWithinDateRange(jobDate time.Time) bool {
-	currentDate := time.Now().UTC()
-	normalizedJobDate := time.Date(
-		currentDate.Year(),
-		jobDate.Month(),
-		jobDate.Day(),
-		0,
-		0,
-		0,
-		0,
-		time.UTC,
-	)
-	normalizedCurrentDate := time.Date(
-		currentDate.Year(),
-		currentDate.Month(),
-		currentDate.Day(),
-		0,
-		0,
-		0,
-		0,
-		time.UTC,
-	)
-
-	diff := normalizedCurrentDate.Sub(normalizedJobDate)
-	days := int(diff.Hours() / 24)
-
-	return 0 <= days && days <= 3
 }
 
 /*
@@ -99,7 +61,7 @@ SaveCompanyName sets the PreviousJobTitle field to the provided companyName.
 Parameters:
 - companyName: The name of the company to save as the previous job title.
 */
-func (iu *InternshipUtilities) SaveCompanyName(companyName string) {
+func (iu *JobUtilities) SaveCompanyName(companyName string) {
 	iu.PreviousJobTitle = companyName
 }
 
@@ -110,7 +72,7 @@ Parameters:
 - location: The location to check.
 Returns: True if the location is not within the US, false otherwise.
 */
-func (iu *InternshipUtilities) IsNotUS(location string) bool {
+func (iu *JobUtilities) IsNotUS(location string) bool {
 	lowerLocation := strings.ToLower(location)
 	for _, notUS := range iu.NotUS {
 		if strings.Contains(lowerLocation, notUS) {
@@ -122,7 +84,7 @@ func (iu *InternshipUtilities) IsNotUS(location string) bool {
 }
 
 /*
-GetInternships processes job postings, filters them based on certain criteria, and sends them to the specified channels.
+GetJobs processes job postings, filters them based on certain criteria, and sends them to the specified channels.
 It operates asynchronously and sends the formatted job postings through a jobPostingsChan channel.
 
 Parameters:
@@ -131,21 +93,34 @@ Parameters:
 - isSummer: A flag indicating whether to process summer internships.
 Returns: A channel through which processed and formatted job postings are sent.
 */
-func (iu *InternshipUtilities) GetInternships(
+func (iu *JobUtilities) GetJobs(
+	ctx context.Context,
 	discordBot *discordgo.Session,
 	channels []string,
 	jobPostingChannel <-chan string,
-	isSummer bool,
+	term string,
 	redisClient *redis.Client,
-) {
+) error {
+	// Check the term is accurate
+	var isValid bool = false 
+	for _, types := range [3]string{"Sumemr", "Co-Op", "New Grad"}{
+		if types == term{
+			isValid = true 
+			break
+		}
+	}
+	
+	if !isValid{
+		return errors.New("Term must be one of these: Summer, Coop, NewGrad")
+	}
 
 	// Determine the index of the job link
 	currentYear := time.Now().Year()
 	var jobLinkIndex int = 4
-	if !isSummer {
+	var hasPrinted bool = false
+	if term == "Co-Op" {
 		jobLinkIndex = 5
 	}
-	var ctx = context.Background()
 
 	for job := range jobPostingChannel {
 		var companyName, jobTitle, jobLink, terms, location string
@@ -160,25 +135,23 @@ func (iu *InternshipUtilities) GetInternships(
 			}
 		}
 
-		// If job link is already in cache, we skip the job
+		// If job link is already in cache or redis db,  we skip the job
 		re, err := regexp.Compile(`href="([^"]+)"`)
 		if err != nil {
 			log.Print("There is no job link within the job posting")
 			continue
 		}
-
 		matches := re.FindStringSubmatch(nonEmptyElements[jobLinkIndex])
 		if len(matches) < 2 {
 			continue
 		}
-
 		jobLink = matches[1]
 		if _, exists := iu.JobCache[jobLink]; exists {
 			continue
 		}
 
 		if _, err := redisClient.Get(ctx, jobLink).Result(); err != nil {
-			log.Panic("Unable to connect to the Redis Database!")
+			continue // The key exits
 		}
 		iu.JobCache[jobLink] = struct{}{}
 
@@ -197,18 +170,6 @@ func (iu *InternshipUtilities) GetInternships(
 			companyName = iu.PreviousJobTitle
 		}
 		iu.SaveCompanyName(companyName)
-
-		datePosted := nonEmptyElements[len(nonEmptyElements)-1]
-		formatedDate := fmt.Sprintf("%s %d", datePosted, currentYear)
-		layout := "Jan 02 2006"
-		jobDate, err := time.Parse(layout, formatedDate)
-		if err != nil {
-			log.Panic(err)
-		}
-
-		if !iu.IsWithinDateRange(jobDate) {
-			continue
-		}
 
 		// We need to check that the position is within the US or remote
 		locationHTML := nonEmptyElements[3]
@@ -247,27 +208,32 @@ func (iu *InternshipUtilities) GetInternships(
 			continue
 		}
 
-		if isSummer {
+		if term == "Summer"{
 			terms = "Summer " + strconv.Itoa(currentYear)
-		} else {
+		} else if term == "Co-Op"{
 			terms = strings.Join(strings.Split(nonEmptyElements[4], ","), " |")
 		}
-		jobTitle = nonEmptyElements[2]
 
-		var post string = fmt.Sprintf(
-			"**📅 Date Posted:** %s\n"+
-				"**ℹ️ Company:** %s\n"+
-				"**👨‍💻 Job Title:** %s\n"+
-				"**📍 Location:** %s\n"+
-				"**➡️ When?:** %s\n\n"+
-				"**👉 Job Link:** %s\n\n\n",
-			datePosted, companyName, jobTitle, location, terms, jobLink,
-		)
+		jobTitle = nonEmptyElements[2]
+		var post strings.Builder 
+		datePosted := nonEmptyElements[len(nonEmptyElements)-1]
+		if !hasPrinted{
+			post.WriteString(fmt.Sprintf("# %s Postings!\n\n", term))	
+			hasPrinted = true
+		}
+		post.WriteString(fmt.Sprintf("**📅 Date Posted:** %s\n", datePosted))
+		post.WriteString(fmt.Sprintf("**ℹ️ Company:** __%s__\n", companyName))
+		post.WriteString(fmt.Sprintf("**👨‍💻 Job Title:** %s\n", jobTitle))
+		post.WriteString(fmt.Sprintf("**📍 Location:** %s\n", location))
+		if term != "New Grad" {
+			post.WriteString(fmt.Sprintf("**➡️  When?:**  %s\n", terms))
+		}
+		post.WriteString(fmt.Sprintf("**👉 Job Link:** <%s>\n%s\n", jobLink, strings.Repeat("-", 153)))
 		iu.TotalJobs++
 
 		// Update the Redis Database
 		if err := redisClient.Set(ctx, jobLink, "", 0).Err(); err != nil {
-			log.Panic("Unable to upage the Redis Database!")
+			return errors.Wrap(err, "Cannot update the Redis DB")	
 		}
 
 		//Work on concurrent posts
@@ -276,7 +242,7 @@ func (iu *InternshipUtilities) GetInternships(
 			wg.Add(1)
 			go func(ch string) {
 				defer wg.Done()
-				if _, err := discordBot.ChannelMessageSend(ch, post); err != nil {
+				if _, err := discordBot.ChannelMessageSend(ch, post.String()); err != nil {
 					log.Panic(err)
 				}
 			}(channel)
@@ -284,4 +250,5 @@ func (iu *InternshipUtilities) GetInternships(
 		wg.Wait()
 	}
 
+	return nil
 }

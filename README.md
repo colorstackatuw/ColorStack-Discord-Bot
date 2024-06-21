@@ -4,7 +4,7 @@
 ![Github CI/CD Status](https://github.com/colorstackatuw/ColorStack-Discord-Bot/actions/workflows/deploy-vm.yml/badge.svg)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white&style=flat-square)](https://www.linkedin.com/in/colorstack-at-uw-madison/)
 
-This Discord bot posts summer and co-op internship opportunities from [Simplify and Pitt CSC](https://github.com/SimplifyJobs/Summer2024-Internships). It's built and maintained by [ColorStack at UW-Madison](https://colorstack.cs.wisc.edu/).
+This Discord bot posts summer and co-op internship opportunities from [Simplify and Pitt CSC](https://github.com/SimplifyJobs/Summer2025-Internships). It's built and maintained by [ColorStack at UW-Madison](https://colorstack.cs.wisc.edu/).
 
 ⚠️ Please note that this bot only posts opportunities that are in the United States or remote ⚠️
 

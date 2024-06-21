@@ -24,6 +24,8 @@ type GitHubUtilities struct {
 	GitHub     *github.Client
 	Comparison *github.CommitsComparison
 	SavedSHA   string
+	IsCoop     bool
+	IsSummer   bool
 }
 
 /*
@@ -34,12 +36,14 @@ Parameters:
 - RepoName: A string specifying the name of the GitHub repository to interact with.
 Returns: A pointer to an instance of GitHubUtilities.
 */
-func NewGitHubUtilities(token, repoName string) *GitHubUtilities {
+func NewGitHubUtilities(token, repoName string, isSummer bool, isCoop bool) *GitHubUtilities {
 	client := github.NewClient(nil).WithAuthToken(token)
 
 	return &GitHubUtilities{
 		RepoName: repoName,
 		GitHub:   client,
+		IsCoop:   isCoop,
+		IsSummer: isSummer,
 	}
 
 }
@@ -49,12 +53,20 @@ SetNewCommit saves the SHA of the latest commit to a JSON file.
 
 Parameters:
 - lastCommit: A string representing the SHA of the last commit to be saved.
+- isNewGrad: True if commit is for repo
+
 Returns: An error if saving fails, nil otherwise.
 */
-func (g *GitHubUtilities) SetNewCommit(lastCommit string) error {
-	dataJson := make(map[string]string)
+func (g *GitHubUtilities) SetNewCommit(lastCommit string, isNewGrad bool) error {
+	var key string
+	if isNewGrad {
+		key = "last_saved_sha_newgrad"
+	} else {
+		key = "last_saved_sha_internship"
+	}
 
-	dataJson["last_saved_sha"] = lastCommit
+	dataJson := make(map[string]string)
+	dataJson[key] = lastCommit
 
 	data, err := json.Marshal(dataJson)
 	if err != nil {
@@ -73,10 +85,18 @@ func (g *GitHubUtilities) SetNewCommit(lastCommit string) error {
 SetSavedSha reads and returns the last saved commit SHA from a JSON file.
 
 Parameters: None.
+
 Returns:
 - An error if reading the file or unmarshalling JSON fails, nil otherwise.
 */
-func (g *GitHubUtilities) SetSavedSha() error {
+func (g *GitHubUtilities) SetSavedSha(isNewGrad bool) error {
+	var key string
+	if isNewGrad {
+		key = "last_saved_sha_newgrad"
+	} else {
+		key = "last_saved_sha_internship"
+	}
+
 	data, err := os.ReadFile(FILEPATH)
 	if err != nil {
 		return errors.Wrap(err, "Can't Read file")
@@ -88,7 +108,7 @@ func (g *GitHubUtilities) SetSavedSha() error {
 		return errors.Wrap(err, "Can't unwrap data")
 	}
 
-	g.SavedSHA = dataJson["last_saved_sha"]
+	g.SavedSHA = dataJson[key]
 	return nil
 }
 
@@ -120,17 +140,7 @@ func (g *GitHubUtilities) GetLastCommit(
 	ctx context.Context,
 	repo *github.Repository,
 ) (string, error) {
-	branches, _, err := g.GitHub.Repositories.ListBranches(
-		ctx,
-		repo.GetOwner().GetLogin(),
-		repo.GetName(),
-		nil,
-	)
-	if err != nil {
-		return "", errors.Wrap(err, "Couldn't get all the branches")
-	}
-
-	branchName := branches[0].GetName()
+	var branchName string = "dev"
 	mainBranch, _, err := g.GitHub.Repositories.GetBranch(
 		ctx,
 		repo.GetOwner().GetLogin(),
@@ -146,27 +156,81 @@ func (g *GitHubUtilities) GetLastCommit(
 }
 
 /*
+Retrieve the last commit information from the saved file
+
+Parameters:
+  - repo: The GitHub repository
+  - isNewGrad: True if getting new grad sha
+
+Returns:
+  - str: The last commit hexadecimal information
+*/
+func (g *GitHubUtilities) GetSavedSha(ctx context.Context, repo *github.Repository, isNewGrad bool) (string, error) {
+	// Determine the key based on isNewGrad
+	var key string = "last_saved_sha_newgrad"
+	if !isNewGrad {
+		key = "last_saved_sha_internship"
+	}
+
+	data, err := os.ReadFile(FILEPATH)
+	if err != nil {
+		return "", errors.Wrap(err, "Can't read file")
+	}
+	var dataJSON map[string]string
+	err = json.Unmarshal(data, &dataJSON)
+	if err != nil {
+		return "", errors.Wrap(err, "Can't unwrap data")
+	}
+
+	// If the file is empty, get the previous commit from the repository
+	if dataJSON[key] != "" {
+		return dataJSON[key], nil
+	} else {
+		recentCommitSHA, err := g.GetLastCommit(ctx, repo)
+		if err != nil {
+			return "", errors.Wrap(err, "Can't get the last commit") 
+		}
+		previousCommit, _, err := g.GitHub.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), recentCommitSHA, nil)
+		if err != nil {
+			return "", errors.Wrap(err, "Can't access the previous commit") 
+		}
+
+		return *previousCommit.Parents[0].SHA, nil
+	}
+}
+
+/*
 SetComparison sets the comparison field of the GitHubUtilities struct by comparing the most recent commit SHA with the previously saved SHA.
 
 Parameters:
 - ctx: A context.Context object for managing cancellations and timeouts.
 - repo: A pointer to a GitHub.Repository object representing the GitHub repository.
-Returns: An error if the comparison fails, nil otherwise.
+- isNewGrad: True if repo is for new grad
+
+Returns: 
+	An error if the comparison fails, nil otherwise.
 */
 func (g *GitHubUtilities) SetComparison(
 	ctx context.Context,
 	repo *github.Repository,
+	isNewGrad bool,
 ) error {
 	recentCommitSha, err := g.GetLastCommit(ctx, repo)
 	if err != nil {
+		g.Comparison = nil
 		return errors.Wrap(err, "Can't find last commit")
+	}
+
+	prevCommit, err := g.GetSavedSha(ctx, repo, isNewGrad)
+	if err != nil{
+		return errors.Wrap(err, "Couldn't get the saved SHA")
 	}
 
 	comparison, _, err := g.GitHub.Repositories.CompareCommits(
 		ctx,
 		repo.GetOwner().GetLogin(),
 		repo.GetName(),
-		g.SavedSHA,
+		prevCommit,
 		recentCommitSha,
 		nil,
 	)
@@ -193,11 +257,13 @@ Returns:
 - A boolean indicating whether the given commit SHA is new (true) or not (false).
 - An error if retrieving the saved commit SHA fails, nil otherwise.
 */
-func (g *GitHubUtilities) IsNewCommit(lastCommitSHA string) bool {
-	if err := g.SetSavedSha(); err != nil {
-		return false
+func (g *GitHubUtilities) IsNewCommit(ctx context.Context, repo *github.Repository, savedSHA string) (bool, error) {
+	lastCommit, err:= g.GetLastCommit(ctx, repo)	
+	if err != nil{
+		return false, errors.Wrap(err, "Couldn't get the last commit")
 	}
-	return lastCommitSHA != g.SavedSHA
+
+	return savedSHA != lastCommit, nil 
 }
 
 func (g *GitHubUtilities) GetCommitChanges(readmeFile string) <-chan string {

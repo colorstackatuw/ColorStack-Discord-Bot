@@ -15,12 +15,12 @@ with patch.dict(
         "discord.ext.commands": MagicMock(),
     },
 ):
-    from src.Utilities.InternshipUtilities import InternshipUtilities
+    from src.Utilities.JobUtilities import JobUtilities
 
 
 def test_is_within_date_range():
     # Arrange
-    internship_util = InternshipUtilities(True, False)
+    internship_util = JobUtilities(True, False)
     random_days = random.randint(1, 6)
     job_date = datetime.now() - timedelta(days=random_days)
     current_date = datetime.now()
@@ -34,7 +34,7 @@ def test_is_within_date_range():
 
 def test_save_company_name():
     # Arrange
-    internship_util = InternshipUtilities(True, False)
+    internship_util = JobUtilities(True, False)
     company_name = "Test Company"
 
     # Act
@@ -63,7 +63,7 @@ async def test_valid_job_posting():
     current_date = datetime(2024, 1, 8)
 
     # Create an instance of your class
-    instance = InternshipUtilities(summer=True, coop=True)
+    instance = JobUtilities(summer=True, coop=True)
     instance.saveCompanyName = MagicMock()
     instance.isWithinDateRange = MagicMock(return_value=True)
     instance.previous_job_title = ""
@@ -73,7 +73,7 @@ async def test_valid_job_posting():
     # Use 'with patch' to mock any external dependencies if needed
     with patch("discord.ext.commands.Bot", new=mock_bot):
         # Execute the method
-        await instance.getInternships(mock_bot, channels, job_postings, current_date, True)
+        await instance.GetJobs(mock_bot, channels, job_postings, current_date, True)
 
     # Assertions to verify the behavior
     assert len(instance.job_cache) == 1  # Ensure the job link was added to the cache

@@ -114,15 +114,20 @@ Returns: None.
 */
 func onReady(s *discordgo.Session, event *discordgo.Ready) {
 	logger.Info().Str("Username", s.State.User.Username).Msg("Logged In")
-
-	githubUtilities := Utilities.NewGitHubUtilities(
+	internshipGithub := Utilities.NewGitHubUtilities(
 		githubToken,
-		"Summer2024-Internships",
+		"Summer2025-Internships",
+		true,
+		true,
 	)
-	internshipUtilities := Utilities.NewInternshipUtilities(true)
-
-	// Start the tasks
-	scheduledTask(ctx, githubUtilities, internshipUtilities)
+	newgradGithub := Utilities.NewGitHubUtilities(
+		githubToken,
+		"New-Grad-Positions",
+		false,
+		false,
+	)
+	JobUtilities := Utilities.NewJobUtilities()
+	scheduledTask(ctx, internshipGithub, newgradGithub, JobUtilities)
 }
 
 /*
@@ -152,6 +157,7 @@ func onGuildJoin(s *discordgo.Session, event *discordgo.GuildCreate) {
 				Err(err).
 				Str("guild", event.Guild.Name).
 				Msg("Could not create a channel named 'opportunities-bot'")
+
 			if err := s.GuildLeave(event.Guild.ID); err != nil {
 				logger.Error().
 					Stack().
@@ -162,11 +168,13 @@ func onGuildJoin(s *discordgo.Session, event *discordgo.GuildCreate) {
 			return
 		}
 		db.WriteChannel(event.Guild, channel)
+
 		if _, err := s.ChannelMessageSend(channel.ID, "Hello! I am the ColorStack Bot. I will be posting new job opportunities here."); err != nil {
 			logger.Error().Stack().Err(err).Str("channel", channel.ID).Msg("Failed to send welcome message")
 		}
 	} else {
 		logger.Info().Msg("We have reached max capacity of 20 servers!")
+
 		if err := s.GuildLeave(event.Guild.ID); err != nil {
 			logger.Error().Stack().Err(err).Str("guild", event.Guild.Name).Msg("Failed to leave guild after reaching capacity")
 		}
@@ -197,75 +205,159 @@ scheduledTask performs a periodic task to check for new GitHub commits and post 
 
 Parameters:
 - ctx: A context.Context object for managing cancellations and timeouts.
-- githubUtilities: A pointer to a Utilities.GitHubUtilities for interacting with GitHub.
-- internshipUtilities: A pointer to a Utilities.InternshipUtilities for handling internship postings.
+- githubUtilities: A internship pointer to a Utilities.GitHubUtilities for interacting with GitHub.
+- newgradUtilities: A new grad pointer to a Utilities.GitHubUtilities for interacting with GitHub.
+- JobUtilities: A pointer to a Utilities.JobUtilities for handling internship postings.
 Returns: None.
 */
 func scheduledTask(
 	ctx context.Context,
-	githubUtilities *Utilities.GitHubUtilities,
-	internshipUtilities *Utilities.InternshipUtilities,
+	internshipGithub *Utilities.GitHubUtilities,
+	newgradGithub *Utilities.GitHubUtilities,
+	jobUtilities *Utilities.JobUtilities,
 ) {
 	// Open Connection
-	repo, err := githubUtilities.CreateGitHubConnection(ctx)
+	internshipRepo, err := internshipGithub.CreateGitHubConnection(ctx)
 	if err != nil {
-		logger.Fatal().Stack().Err(err).Msg("Failed to create GitHub connection")
+		logger.Fatal().Stack().Err(err).Msg("Failed to create GitHub connection for internship jobs")
+	}
+	newgradRepo, err := newgradGithub.CreateGitHubConnection(ctx)
+	if err != nil {
+		logger.Fatal().Stack().Err(err).Msg("Failed to create GitHub connection for new grad jobs")
 	}
 
 	for range time.Tick(60 * time.Second) {
 		startTime := time.Now()
-		lastCommitSHA, err := githubUtilities.GetLastCommit(ctx, repo)
+
+		// Get all the commit numbers
+		internshipSHA, err := internshipGithub.GetSavedSha(ctx, internshipRepo, false)
 		if err != nil {
-			logger.Error().Stack().Err(err).Msg("Failed to get last saved commit SHA")
+			logger.Error().Stack().Err(err).Msg("Failed to get internship SHA")
+			continue
+		}
+		newgradSHA, err := newgradGithub.GetSavedSha(ctx, newgradRepo, true)
+		if err != nil {
+			logger.Error().Stack().Err(err).Msg("Failed to get new grad SHA")
 			continue
 		}
 
-		if githubUtilities.IsNewCommit(lastCommitSHA) {
-			logger.Info().Msg("New commit has been found. Finding new jobs...")
-			githubUtilities.SetComparison(ctx, repo)
+		// Collect any new internship jobs
+		newInternships, err := internshipGithub.IsNewCommit(ctx, internshipRepo, internshipSHA)
+		if err != nil {
+			logger.Error().Stack().Err(err).Msg("Failed to get the new commit")
+			continue
+		}
+
+		if newInternships {
+			logger.Info().Msg("New commit has been found. Finding new internship jobs...")
+			internshipGithub.SetComparison(ctx, internshipRepo, false)
 
 			channelIDs, err := db.GetChannels()
 			if err != nil {
 				logger.Error().Stack().Err(err).Msg("Failed to get channel IDs")
 			}
 
-			var isCoop, isSummer bool
-
-			if isCoop {
-				jobPostings := githubUtilities.GetCommitChanges("README-Off-Season.md")
-				internshipUtilities.GetInternships(
+			if internshipGithub.IsCoop {
+				jobPostings := internshipGithub.GetCommitChanges("README-Off-Season.md")
+				err := jobUtilities.GetJobs(
+					ctx,
 					bot,
 					channelIDs[:20],
 					jobPostings,
-					false,
+					"Co-Op",
 					redisClient,
-				)
+				) 
+
+				if err != nil {
+					logger.Error().Stack().Err(err).Msg("Issue collecting jobs")
+				}
 			}
 
-			if isSummer {
-				jobPostings := githubUtilities.GetCommitChanges("README.md")
-				internshipUtilities.GetInternships(
+			if internshipGithub.IsSummer {
+				jobPostings := internshipGithub.GetCommitChanges("README.md")
+				err := jobUtilities.GetJobs(
+					ctx,
 					bot,
 					channelIDs[:20],
 					jobPostings,
-					true,
+					"Summer",
 					redisClient,
 				)
+				
+				if err != nil {
+					logger.Error().Stack().Err(err).Msg("Issue collecting jobs")
+				} 
 			}
 
-			if err := githubUtilities.SetNewCommit(lastCommitSHA); err != nil {
+			// Update the saved commit SHA
+			sha_commit, err := internshipGithub.GetLastCommit(ctx, internshipRepo)
+			if err != nil {
+				logger.Error().Stack().Err(err).Msg("Failed to get the latest commit!")
+			}
+
+			if err := internshipGithub.SetNewCommit(sha_commit, false); err != nil {
 				logger.Error().Stack().Err(err).Msg("Failed to set the new commit")
 			}
 
-			logger.Info().Int("total_jobs", internshipUtilities.TotalJobs).Msg("New jobs found!")
+			logger.Info().Int("total_jobs", jobUtilities.TotalJobs).Msg("New jobs found!")
 
-			internshipUtilities.ClearJobLinks()
-			internshipUtilities.ClearJobCounter()
-			githubUtilities.ClearComparison()
+			jobUtilities.ClearJobLinks()
+			jobUtilities.ClearJobCounter()
+			internshipGithub.ClearComparison()
 
-			logger.Info().Msg("All jobs have been posted!")
+			logger.Info().Msg("All internship jobs have been posted!")
 		} else {
-			logger.Info().Msg("No new commits found.")
+			logger.Info().Msg("No new internship commits found.")
+		}
+
+		// Collect new grad jobs
+		newJobs, err := newgradGithub.IsNewCommit(ctx, newgradRepo, newgradSHA)
+		if err != nil {
+			logger.Error().Stack().Err(err).Msg("Failed to get the new commit")
+			continue
+		}
+
+		if newJobs {
+			logger.Info().Msg("New commit has been found. Finding new grad jobs...")
+			newgradGithub.SetComparison(ctx, newgradRepo, true)
+
+			channelIDs, err := db.GetChannels()
+			if err != nil {
+				logger.Error().Stack().Err(err).Msg("Failed to get channel IDs")
+			}
+
+			jobPostings := internshipGithub.GetCommitChanges("README.md")
+			err = jobUtilities.GetJobs(
+				ctx,
+				bot,
+				channelIDs[:20],
+				jobPostings,
+				"New Grad",
+				redisClient,
+			) 
+			if err != nil {
+				logger.Error().Stack().Err(err).Msg("Issue collecting jobs")
+			} 
+
+			// Update the saved commit SHA
+			sha_commit, err := newgradGithub.GetLastCommit(ctx, newgradRepo)
+			if err != nil {
+				logger.Error().Stack().Err(err).Msg("Failed to get the latest commit!")
+			}
+
+			if err := newgradGithub.SetNewCommit(sha_commit, true); err != nil {
+				logger.Error().Stack().Err(err).Msg("Failed to set the new commit")
+			}
+
+			logger.Info().Int("total_jobs", jobUtilities.TotalJobs).Msg("New jobs found!")
+
+			jobUtilities.ClearJobLinks()
+			jobUtilities.ClearJobCounter()
+			internshipGithub.ClearComparison()
+
+			logger.Info().Msg("All new grad jobs have been posted!")
+		} else {
+			logger.Info().Msg("No new new grad commits found.")
 		}
 
 		endTime := time.Now()
