@@ -160,7 +160,7 @@ class JobsUtilities:
                 if term == "Co-Op":
                     terms = " |".join(non_empty_elements[4].split(","))
                 elif term == "Summer":
-                    terms = "Summer" + " " + str(current_year)
+                    terms = "Summer 2025" 
                 
                 post = ""
                 if not has_printed:
