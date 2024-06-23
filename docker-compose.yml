@@ -1,5 +1,15 @@
 version: "3.8"
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.debug
+    ports:
+      - "3000:3000"
+      - "4000:4000"
+    depends_on:
+      - redis 
+
   main:
     build: .
     image: mybot:latest
@@ -10,6 +20,9 @@ services:
     volumes:
       - ./commits:/app/commits
       - ./logs:/app/logs
+    depends_on:
+      - redis  
+
   redis:
     image: redis:latest
     container_name: Redis
@@ -17,7 +30,7 @@ services:
     volumes:
       - redis_volume_data:/data
     ports:
-      - 6379:6379
+      - "127.0.0.1:6379:6379" 
 
 volumes:
   redis_volume_data:

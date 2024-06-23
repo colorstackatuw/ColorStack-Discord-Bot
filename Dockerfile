@@ -4,6 +4,9 @@ FROM golang:1.22.4
 # Set the working directory in the container to /app
 WORKDIR /app
 
+# Set up the docker to listen to port 80 for debugging
+EXPOSE 3000
+
 # Install git, required to clone the repository
 RUN apt-get update && apt-get install -y git
 
