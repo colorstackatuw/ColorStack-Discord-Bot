@@ -78,10 +78,10 @@ class JobsUtilities:
         if term not in ["Summer", "Co-Op", "New Grad"]:
             raise ValueError("Term must be one of these: Summer, Coop, NewGrad")
 
-        try:
-            current_date = datetime.now()
-            has_printed = False
-            for job in job_postings:
+        current_date = datetime.now()
+        has_printed = False
+        for job in job_postings:
+            try:
                 # Determine the index of the job link
                 job_link_index = 5 if term == "Co-Op" else 4
 
@@ -160,8 +160,8 @@ class JobsUtilities:
                 if term == "Co-Op":
                     terms = " |".join(non_empty_elements[4].split(","))
                 elif term == "Summer":
-                    terms = "Summer 2025" 
-                
+                    terms = "Summer 2025"
+
                 post = ""
                 if not has_printed:
                     post += f"# {term} Postings!\n\n"
@@ -181,7 +181,6 @@ class JobsUtilities:
                 # Send the job posting to the Discord channel
                 coroutines = (bot.get_channel(channel).send(post) for channel in channels if bot.get_channel(channel))
                 await asyncio.gather(*coroutines)
-
-        except Exception as e:
-            logging.exception("Failed to retrieve internships: %s", e)
-            raise e
+            except Exception as e:
+                logging.exception("Failed to process job posting: %s\nJob: %s", e, job)
+                continue
