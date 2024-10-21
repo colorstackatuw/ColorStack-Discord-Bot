@@ -12,6 +12,7 @@ Prerequisites:
 import asyncio
 import logging
 import re
+import redis
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 
@@ -62,6 +63,7 @@ class JobsUtilities:
     async def getJobs(
         self,
         bot: discord.ext.commands.Bot,
+        redis_client: redis.client.Redis,
         channels: list[int],
         job_postings: Iterable[str],
         term: str,
@@ -91,6 +93,10 @@ class JobsUtilities:
                 # If the job link is already in the cache, we skip the job posting
                 job_link = re.search(r'href="([^"]+)"', non_empty_elements[job_link_index]).group(1)
                 if job_link in self.job_cache:
+                    continue
+
+                # Verify it hasn't been posted
+                if redis_client.exists(job_link):
                     continue
 
                 self.job_cache.add(job_link)  # Save the job link
@@ -177,6 +183,10 @@ class JobsUtilities:
                     post += f"**➡️  When?:**  {terms}\n"
                 post += f"**👉 Job Link:** <{job_link}>\n" f"{'-' * 153}"
                 self.total_jobs += 1
+
+                # Add the job link to redis database
+                redis_client.set(job_link, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                logging.info("Added the job link to redis!")
 
                 # Send the job posting to the Discord channel
                 coroutines = (bot.get_channel(channel).send(post) for channel in channels if bot.get_channel(channel))

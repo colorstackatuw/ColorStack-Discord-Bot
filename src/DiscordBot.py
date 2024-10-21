@@ -10,6 +10,7 @@ Prerequisites:
 - A Discord bot token with the necessary permissions.
 - A GitHub personal access token with the necessary permissions.
 """
+
 import asyncio
 import logging
 import os
@@ -17,6 +18,7 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
 import discord
+import redis
 from DatabaseConnector import DatabaseConnector
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
@@ -52,7 +54,9 @@ bot = commands.Bot(command_prefix="$", intents=intents)
 
 
 @tasks.loop(seconds=60)
-async def scheduled_task(internship_github: GitHubUtilities, newgrad_github: GitHubUtilities, job_utilities: JobsUtilities):
+async def scheduled_task(
+    internship_github: GitHubUtilities, newgrad_github: GitHubUtilities, job_utilities: JobsUtilities
+):
     """
     A scheduled task that runs every 60 seconds to check for new commits in the GitHub repository.
 
@@ -68,12 +72,13 @@ async def scheduled_task(internship_github: GitHubUtilities, newgrad_github: Git
             internship_repo = internship_github.createGitHubConnection()
             internship_sha = internship_github.getSavedSha(internship_repo, False)
             newgrad_repo = newgrad_github.createGitHubConnection()
-            newgrad_sha = newgrad_github.getSavedSha(newgrad_repo, True) 
+            newgrad_sha = newgrad_github.getSavedSha(newgrad_repo, True)
+            redis_client = redis.Redis(host="localhost", port=6379, db=0)
 
-            # Process all internship 
+            # Process all internship
             if internship_github.isNewCommit(internship_repo, internship_sha):
                 logger.info("New internship commit has been found. Finding new jobs...")
-                internship_github.setComparison(internship_repo, False)  
+                internship_github.setComparison(internship_repo, False)
 
                 # Get the channels to send the job postings
                 db = DatabaseConnector()
@@ -81,11 +86,11 @@ async def scheduled_task(internship_github: GitHubUtilities, newgrad_github: Git
 
                 if internship_github.is_coop:
                     job_postings = internship_github.getCommitChanges("README-Off-Season.md")
-                    await job_utilities.getJobs(bot, channel_ids[:20], job_postings, "Co-Op")
+                    await job_utilities.getJobs(bot, redis_client, channel_ids[:20], job_postings, "Co-Op")
 
                 if internship_github.is_summer:
                     job_postings = internship_github.getCommitChanges("README.md")
-                    await job_utilities.getJobs(bot, channel_ids[:20], job_postings, "Summer")
+                    await job_utilities.getJobs(bot, redis_client, channel_ids[:20], job_postings, "Summer")
 
                 sha_commit = internship_github.getLastCommit(internship_repo)
                 internship_github.setNewCommit(sha_commit, False)
@@ -101,13 +106,13 @@ async def scheduled_task(internship_github: GitHubUtilities, newgrad_github: Git
             # Process all new gradjobs
             if newgrad_github.isNewCommit(newgrad_repo, newgrad_sha):
                 logger.info("New grad commit has been found. Finding new jobs...")
-                newgrad_github.setComparison(newgrad_repo, True)  
+                newgrad_github.setComparison(newgrad_repo, True)
 
                 # Get the channels to send the job postings
                 db = DatabaseConnector()
                 channel_ids = db.getChannels()
                 job_postings = newgrad_github.getCommitChanges("README.md")
-                await job_utilities.getJobs(bot, channel_ids[:20], job_postings, "New Grad")
+                await job_utilities.getJobs(bot, redis_client, channel_ids[:20], job_postings, "New Grad")
 
                 sha_commit = newgrad_github.getLastCommit(newgrad_repo)
                 newgrad_github.setNewCommit(sha_commit, True)
@@ -183,8 +188,10 @@ async def on_ready():
     """
     logger.info(f"Logged in as {bot.user.name}")
 
-    github_internship = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/Summer2025-Internships", isSummer=True, isCoop=True)
-    github_newgrad = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/New-Grad-Positions") 
+    github_internship = GitHubUtilities(
+        token=GITHUB_TOKEN, repo_name="SimplifyJobs/Summer2025-Internships", isSummer=True, isCoop=True
+    )
+    github_newgrad = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/New-Grad-Positions")
     job_utilities = JobsUtilities()
     scheduled_task.start(github_internship, github_newgrad, job_utilities)  # Start the loop
 
