@@ -54,6 +54,22 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="$", intents=intents)
 
 
+@tasks.loop(hours=12)
+async def health_check_task():
+    """
+    A scheduled task that runs every 12 hours to check the database connection and prevent shutdown
+    """
+
+    async with lock:
+        try:
+            logger.info("Conducting a health check...")
+            db = DatabaseConnector()
+            _ = db.getChannels()
+            logger.info("Able to connect to database!")
+        except Exception:
+            logger.error("An error occurred in the health check task.", exc_info=True)
+
+
 @tasks.loop(seconds=60)
 async def scheduled_task(
     internship_github: GitHubUtilities, newgrad_github: GitHubUtilities, job_utilities: JobsUtilities
@@ -196,6 +212,7 @@ async def on_ready():
     github_newgrad = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/New-Grad-Positions")
     job_utilities = JobsUtilities()
     scheduled_task.start(github_internship, github_newgrad, job_utilities)  # Start the loop
+    health_check_task.start()  # Start health check task
 
 
 if __name__ == "__main__":
