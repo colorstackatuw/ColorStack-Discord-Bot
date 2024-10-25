@@ -97,6 +97,7 @@ class JobsUtilities:
 
                 # Verify it hasn't been posted
                 if redis_client.exists(job_link):
+                    logging.info("It already exits within redis database: ", job_link)
                     continue
 
                 self.job_cache.add(job_link)  # Save the job link

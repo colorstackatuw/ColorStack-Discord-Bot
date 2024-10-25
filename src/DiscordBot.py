@@ -19,6 +19,7 @@ from logging.handlers import RotatingFileHandler
 
 import discord
 import redis
+
 from DatabaseConnector import DatabaseConnector
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
@@ -73,7 +74,7 @@ async def scheduled_task(
             internship_sha = internship_github.getSavedSha(internship_repo, False)
             newgrad_repo = newgrad_github.createGitHubConnection()
             newgrad_sha = newgrad_github.getSavedSha(newgrad_repo, True)
-            redis_client = redis.Redis(host="localhost", port=6379, db=0)
+            redis_client = redis.Redis(host="redis", port=6379, db=0)
 
             # Process all internship
             if internship_github.isNewCommit(internship_repo, internship_sha):
@@ -129,6 +130,7 @@ async def scheduled_task(
             logger.error("An error occurred in the scheduled task.", exc_info=True)
             await bot.close()
         finally:
+            redis_client.close()
             end_time = datetime.now()
             execution_time = end_time - start_time
             logger.info(f"Task execution time: {execution_time}")
