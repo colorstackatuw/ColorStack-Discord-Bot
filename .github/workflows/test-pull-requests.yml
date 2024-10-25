@@ -16,7 +16,7 @@ jobs:
         run: |
           if ! command -v docker-compose &> /dev/null; then
             echo "docker-compose could not be found, installing..."
-            apt-get update && sudo apt-get install -y docker-compose
+            sudo apt-get update && sudo apt-get install -y docker-compose
           else
             echo "docker-compose is already installed."
           fi
