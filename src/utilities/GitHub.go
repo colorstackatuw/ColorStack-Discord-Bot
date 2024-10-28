@@ -5,7 +5,7 @@ This class provides a set of utilities to interact with GitHub repositories usin
 It includes functionalities to establish a connection to a specified GitHub repository, update and retrieve
 the last commit information, and check for new commits.
 */
-package Utilities
+package utilities
 
 import (
 	"context"
@@ -45,7 +45,6 @@ func NewGitHubUtilities(token, repoName string, isSummer bool, isCoop bool) *Git
 		IsCoop:   isCoop,
 		IsSummer: isSummer,
 	}
-
 }
 
 /*
@@ -165,7 +164,11 @@ Parameters:
 Returns:
   - str: The last commit hexadecimal information
 */
-func (g *GitHubUtilities) GetSavedSha(ctx context.Context, repo *github.Repository, isNewGrad bool) (string, error) {
+func (g *GitHubUtilities) GetSavedSha(
+	ctx context.Context,
+	repo *github.Repository,
+	isNewGrad bool,
+) (string, error) {
 	// Determine the key based on isNewGrad
 	var key string = "last_saved_sha_newgrad"
 	if !isNewGrad {
@@ -188,11 +191,11 @@ func (g *GitHubUtilities) GetSavedSha(ctx context.Context, repo *github.Reposito
 	} else {
 		recentCommitSHA, err := g.GetLastCommit(ctx, repo)
 		if err != nil {
-			return "", errors.Wrap(err, "Can't get the last commit") 
+			return "", errors.Wrap(err, "Can't get the last commit")
 		}
 		previousCommit, _, err := g.GitHub.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), recentCommitSHA, nil)
 		if err != nil {
-			return "", errors.Wrap(err, "Can't access the previous commit") 
+			return "", errors.Wrap(err, "Can't access the previous commit")
 		}
 
 		return *previousCommit.Parents[0].SHA, nil
@@ -207,7 +210,8 @@ Parameters:
 - repo: A pointer to a GitHub.Repository object representing the GitHub repository.
 - isNewGrad: True if repo is for new grad
 
-Returns: 
+Returns:
+
 	An error if the comparison fails, nil otherwise.
 */
 func (g *GitHubUtilities) SetComparison(
@@ -222,7 +226,7 @@ func (g *GitHubUtilities) SetComparison(
 	}
 
 	prevCommit, err := g.GetSavedSha(ctx, repo, isNewGrad)
-	if err != nil{
+	if err != nil {
 		return errors.Wrap(err, "Couldn't get the saved SHA")
 	}
 
@@ -240,7 +244,6 @@ func (g *GitHubUtilities) SetComparison(
 
 	g.Comparison = comparison
 	return nil
-
 }
 
 /* ClearComparison clears the comparison field of the GitHubUtilities struct. */
@@ -257,13 +260,17 @@ Returns:
 - A boolean indicating whether the given commit SHA is new (true) or not (false).
 - An error if retrieving the saved commit SHA fails, nil otherwise.
 */
-func (g *GitHubUtilities) IsNewCommit(ctx context.Context, repo *github.Repository, savedSHA string) (bool, error) {
-	lastCommit, err:= g.GetLastCommit(ctx, repo)	
-	if err != nil{
+func (g *GitHubUtilities) IsNewCommit(
+	ctx context.Context,
+	repo *github.Repository,
+	savedSHA string,
+) (bool, error) {
+	lastCommit, err := g.GetLastCommit(ctx, repo)
+	if err != nil {
 		return false, errors.Wrap(err, "Couldn't get the last commit")
 	}
 
-	return savedSHA != lastCommit, nil 
+	return savedSHA != lastCommit, nil
 }
 
 func (g *GitHubUtilities) GetCommitChanges(readmeFile string) <-chan string {

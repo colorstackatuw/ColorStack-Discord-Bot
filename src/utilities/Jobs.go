@@ -1,4 +1,4 @@
-package Utilities
+package utilities
 
 import (
 	"context"
@@ -102,15 +102,15 @@ func (iu *JobUtilities) GetJobs(
 	redisClient *redis.Client,
 ) error {
 	// Check the term is accurate
-	var isValid bool = false 
-	for _, types := range [3]string{"Sumemr", "Co-Op", "New Grad"}{
-		if types == term{
-			isValid = true 
+	var isValid bool = false
+	for _, types := range [3]string{"Sumemr", "Co-Op", "New Grad"} {
+		if types == term {
+			isValid = true
 			break
 		}
 	}
-	
-	if !isValid{
+
+	if !isValid {
 		return errors.New("Term must be one of these: Summer, Coop, NewGrad")
 	}
 
@@ -151,7 +151,8 @@ func (iu *JobUtilities) GetJobs(
 		}
 
 		if _, err := redisClient.Get(ctx, jobLink).Result(); err != nil {
-			continue // The key exits
+			log.Printf("It already exists within the database %v", jobLink)
+			continue
 		}
 		iu.JobCache[jobLink] = struct{}{}
 
@@ -208,17 +209,17 @@ func (iu *JobUtilities) GetJobs(
 			continue
 		}
 
-		if term == "Summer"{
+		if term == "Summer" {
 			terms = "Summer " + strconv.Itoa(currentYear)
-		} else if term == "Co-Op"{
+		} else if term == "Co-Op" {
 			terms = strings.Join(strings.Split(nonEmptyElements[4], ","), " |")
 		}
 
 		jobTitle = nonEmptyElements[2]
-		var post strings.Builder 
+		var post strings.Builder
 		datePosted := nonEmptyElements[len(nonEmptyElements)-1]
-		if !hasPrinted{
-			post.WriteString(fmt.Sprintf("# %s Postings!\n\n", term))	
+		if !hasPrinted {
+			post.WriteString(fmt.Sprintf("# %s Postings!\n\n", term))
 			hasPrinted = true
 		}
 		post.WriteString(fmt.Sprintf("**📅 Date Posted:** %s\n", datePosted))
@@ -228,15 +229,17 @@ func (iu *JobUtilities) GetJobs(
 		if term != "New Grad" {
 			post.WriteString(fmt.Sprintf("**➡️  When?:**  %s\n", terms))
 		}
-		post.WriteString(fmt.Sprintf("**👉 Job Link:** <%s>\n%s\n", jobLink, strings.Repeat("-", 153)))
+		post.WriteString(
+			fmt.Sprintf("**👉 Job Link:** <%s>\n%s\n", jobLink, strings.Repeat("-", 153)),
+		)
 		iu.TotalJobs++
 
 		// Update the Redis Database
 		if err := redisClient.Set(ctx, jobLink, "", 0).Err(); err != nil {
-			return errors.Wrap(err, "Cannot update the Redis DB")	
+			return errors.Wrap(err, "Cannot update the Redis DB")
 		}
 
-		//Work on concurrent posts
+		// Work on concurrent posts
 		wg := sync.WaitGroup{}
 		for _, channel := range channels {
 			wg.Add(1)
