@@ -15,7 +15,7 @@ import os
 import re
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from DiscordBot import GITHUB_TOKEN
+from src.config import GITHUB_TOKEN
 
 import discord
 import redis
