@@ -15,11 +15,15 @@ import os
 import re
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from src.config import GITHUB_TOKEN
 
 import discord
 import redis
+from dotenv import load_dotenv
 from github import Github
+
+load_dotenv()
+
+GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
 class JobsUtilities:
     NOT_US = ["canada", "uk", "united kingdom", "eu"]
@@ -198,25 +202,22 @@ class JobsUtilities:
                 logging.exception("Failed to process job posting: %s\nJob: %s", e, job)
                 continue
 
-def get_latest_internship_repo():
-    g = Github(GITHUB_TOKEN)
-    org = g.get_organization("SimplifyJobs")
-    repos = org.get_repos()
+    def get_latest_internship_repo():
+        g = Github(GITHUB_TOKEN)
+        org = g.get_organization("SimplifyJobs")
+        repos = org.get_repos()
 
-    matching_repos = []
-    for repo in repos:
-        if repo.name.startswith("Summer"):
-            suffix = repo.name[len("Summer"):]
-            year = suffix.split("-")[0]
-            if len(year) == 4 and year.isdigit():
-                matching_repos.append(repo.name)
+        matching_repos = []
+        for repo in repos:
+            if repo.name.startswith("Summer"):
+                suffix = repo.name[len("Summer"):]
+                year = suffix.split("-")[0]
+                if len(year) == 4 and year.isdigit():
+                    matching_repos.append(repo.name)
 
-    if not matching_repos:
-        raise ValueError(
-            "No repositories matching the pattern 'SummerYYYY-Internships' were found in the organization SimplifyJobs. Make sure the naming format hasn't changed and that your GitHub token has the necessary permissions."
-        )
+        if not matching_repos:
+            raise ValueError(
+                "No repositories matching the pattern 'SummerYYYY-Internships' were found in the organization SimplifyJobs. Make sure the naming format hasn't changed and that your GitHub token has the necessary permissions."
+            )
 
-    latest_repo = max(
-        matching_repos, key=lambda name: int(name[len("Summer"):].split("-")[0])
-    )
-    return latest_repo
+        return max(matching_repos)

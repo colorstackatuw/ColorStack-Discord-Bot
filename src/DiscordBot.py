@@ -13,6 +13,7 @@ Prerequisites:
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
@@ -20,10 +21,14 @@ import discord
 import redis
 from DatabaseConnector import DatabaseConnector
 from discord.ext import commands, tasks
+from dotenv import load_dotenv
 
 from GitHubUtilities import GitHubUtilities
-from JobsUtilities import JobsUtilities, get_latest_internship_repo
-from src.config import DISCORD_TOKEN, GITHUB_TOKEN
+from JobsUtilities import JobsUtilities
+
+load_dotenv()
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
 # Global Lock
 lock = asyncio.Lock()
@@ -77,7 +82,7 @@ async def scheduled_task(job_utilities: JobsUtilities):
         try:
             start_time = datetime.now()
 
-            latest_repo = get_latest_internship_repo()
+            latest_repo = JobsUtilities.get_latest_internship_repo()
             logger.info(f"Using latest internship repository: {latest_repo}")
 
             internship_github = GitHubUtilities(
