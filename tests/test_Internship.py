@@ -4,8 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# How to test the code
-# 1) Run the cmd: pytest tests/test_Internship.py
+# To test the code run cmd: make test
 
 with patch.dict(
     "sys.modules",
