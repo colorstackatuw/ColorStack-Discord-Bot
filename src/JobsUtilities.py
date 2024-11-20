@@ -213,6 +213,9 @@ class JobsUtilities:
 
     @staticmethod
     def get_latest_internship_repo():
+        # Fallback if cached repository is invalid
+        g = Github(GITHUB_TOKEN)
+        org = g.get_organization("SimplifyJobs")
 
         # Try to use the cached repository first
         cached_repo = JobsUtilities.get_cached_latest_repo()
@@ -223,9 +226,6 @@ class JobsUtilities:
             except GithubException as e:
                 logging.warning(f"Cached repo '{cached_repo}' not valid: {e}")
         
-        # Fallback if cached repository is invalid
-        g = Github(GITHUB_TOKEN)
-        org = g.get_organization("SimplifyJobs")
         repos = org.get_repos()
 
         matching_repos = []
