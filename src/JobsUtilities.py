@@ -11,23 +11,16 @@ Prerequisites:
 
 import asyncio
 import logging
-import os
 import re
+import redis
 from collections.abc import Iterable
 from datetime import datetime, timedelta
 
 import discord
-import redis
-from dotenv import load_dotenv
-from github import Github, GithubException
 
-load_dotenv()
-
-GITHUB_TOKEN = os.getenv("GIT_TOKEN")
 
 class JobsUtilities:
     NOT_US = ["canada", "uk", "united kingdom", "eu"]
-    latest_cached_repo = None
 
     def __init__(self):
         self.previous_job_title = ""
@@ -202,45 +195,3 @@ class JobsUtilities:
             except Exception as e:
                 logging.exception("Failed to process job posting: %s\nJob: %s", e, job)
                 continue
-
-    @staticmethod
-    def get_cached_latest_repo():
-        return JobsUtilities.latest_cached_repo
-
-    @staticmethod
-    def set_cached_latest_repo(repo_name):
-        JobsUtilities.latest_cached_repo = repo_name
-
-    @staticmethod
-    def get_latest_internship_repo():
-
-        # Try to use the cached repository first
-        cached_repo = JobsUtilities.get_cached_latest_repo()
-        if cached_repo:
-            try:
-                if org.get_repo(cached_repo):
-                    return cached_repo
-            except GithubException as e:
-                logging.warning(f"Cached repo '{cached_repo}' not valid: {e}")
-        
-        # Fallback if cached repository is invalid
-        g = Github(GITHUB_TOKEN)
-        org = g.get_organization("SimplifyJobs")
-        repos = org.get_repos()
-
-        matching_repos = []
-        for repo in repos:
-            if repo.name.startswith("Summer"):
-                suffix = repo.name[len("Summer"):]
-                year = suffix.split("-")[0]
-                if len(year) == 4 and year.isdigit():
-                    matching_repos.append(repo.name)
-
-        if not matching_repos:
-            raise ValueError(
-                "No repositories matching the pattern 'SummerYYYY-Internships' were found in the organization SimplifyJobs. Make sure the naming format hasn't changed and that your GitHub token has the necessary permissions."
-            )
-
-        latest_repo = max(matching_repos)
-        JobsUtilities.set_cached_latest_repo(latest_repo)
-        return latest_repo

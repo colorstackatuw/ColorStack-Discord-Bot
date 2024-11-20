@@ -19,10 +19,10 @@ from logging.handlers import RotatingFileHandler
 
 import discord
 import redis
+
 from DatabaseConnector import DatabaseConnector
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
-
 from GitHubUtilities import GitHubUtilities
 from JobsUtilities import JobsUtilities
 
@@ -71,24 +71,20 @@ async def health_check_task():
 
 
 @tasks.loop(seconds=60)
-async def scheduled_task(job_utilities: JobsUtilities):
+async def scheduled_task(
+    internship_github: GitHubUtilities, newgrad_github: GitHubUtilities, job_utilities: JobsUtilities
+):
     """
     A scheduled task that runs every 60 seconds to check for new commits in the GitHub repository.
 
     Parameters:
+        - internship_github: Internship object
+        - newgrad_github: New Grad GitHubUtilities object
         - job_utilities: The JobsUtilities object
     """
     async with lock:
         try:
             start_time = datetime.now()
-
-            latest_repo = JobsUtilities.get_latest_internship_repo()
-            logger.info(f"Using latest internship repository: {latest_repo}")
-
-            internship_github = GitHubUtilities(
-                token=GITHUB_TOKEN, repo_name=f"SimplifyJobs/{latest_repo}", isSummer=True, isCoop=True
-            )
-            newgrad_github = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/New-Grad-Positions")
 
             internship_repo = internship_github.createGitHubConnection()
             internship_sha = internship_github.getSavedSha(internship_repo, False)
@@ -124,7 +120,7 @@ async def scheduled_task(job_utilities: JobsUtilities):
 
                 logger.info("All internship jobs have been posted!")
 
-            # Process all new grad jobs
+            # Process all new gradjobs
             if newgrad_github.isNewCommit(newgrad_repo, newgrad_sha):
                 logger.info("New grad commit has been found. Finding new jobs...")
                 newgrad_github.setComparison(newgrad_repo, True)
@@ -209,12 +205,14 @@ async def on_ready():
     Event that is triggered when the bot is ready to start sending messages.
     """
     logger.info(f"Logged in as {bot.user.name}")
-    try:
-        job_utilities = JobsUtilities()
-        scheduled_task.start(job_utilities)  # Start the loop
-        health_check_task.start()  # Start health check task
-    except Exception as e:
-        logger.error(f"Failed to start scheduled tasks: {e}", exc_info=True)
+
+    github_internship = GitHubUtilities(
+        token=GITHUB_TOKEN, repo_name="SimplifyJobs/Summer2025-Internships", isSummer=True, isCoop=True
+    )
+    github_newgrad = GitHubUtilities(token=GITHUB_TOKEN, repo_name="SimplifyJobs/New-Grad-Positions")
+    job_utilities = JobsUtilities()
+    scheduled_task.start(github_internship, github_newgrad, job_utilities)  # Start the loop
+    health_check_task.start()  # Start health check task
 
 
 if __name__ == "__main__":
