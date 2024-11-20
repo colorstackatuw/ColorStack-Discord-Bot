@@ -26,9 +26,9 @@ def test_create_github_connection(mock_getenv):
 @patch("github.Repository.Repository")
 def test_get_last_commit(mock_repo):
     utilities = GitHubUtilities("token", "repo")
-    mock_branch = MagicMock()  # Fake a respository
+    mock_branch = MagicMock()
     mock_branch.commit.sha = "123abc"
-    mock_repo.get_branches.return_value = [mock_branch]
+    mock_repo.get_branch.return_value = mock_branch
     result = utilities.getLastCommit(mock_repo)
     assert result == "123abc"
 

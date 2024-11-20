@@ -4,8 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# How to test the code
-# 1) Run the cmd: pytest tests/test_Internship.py
+# To test the code run cmd: make test
 
 with patch.dict(
     "sys.modules",
@@ -48,7 +47,8 @@ def test_save_company_name():
 async def test_valid_job_posting():
     # Directly create the mock bot
     mock_bot = MagicMock()
-    mock_bot.get_channel = MagicMock(return_value=AsyncMock())
+    mock_channel = AsyncMock()
+    mock_bot.get_channel.return_value = mock_channel
 
     channels = [123456789, 987654321]
     job = """
@@ -59,10 +59,10 @@ async def test_valid_job_posting():
             <img src="https://i.imgur.com/aVnQdox.png" width="30" alt="Simplify"></a>
             | Feb 05 |
             """
-    job_postings = [job]
-    current_date = datetime(2024, 1, 8)
+    job_postings = [job]    
+    redis_mock = MagicMock()
+    redis_mock.exists.return_value = False
 
-    # Create an instance of your class
     instance = JobsUtilities()
     instance.saveCompanyName = MagicMock()
     instance.isWithinDateRange = MagicMock(return_value=True)
@@ -70,12 +70,10 @@ async def test_valid_job_posting():
     instance.job_cache = set()
     instance.total_jobs = 0
 
-    # Use 'with patch' to mock any external dependencies if needed
-    with patch("discord.ext.commands.Bot", new=mock_bot):
-        # Execute the method
-        await instance.getInternships(mock_bot, channels, job_postings, current_date, True)
+    # Act
+    await instance.getJobs(mock_bot, redis_mock, channels, job_postings, "Summer")
 
-    # Assertions to verify the behavior
+    # Assert
     assert len(instance.job_cache) == 1  # Ensure the job link was added to the cache
     assert instance.total_jobs == 1  # Ensure the job count was incremented
     mock_bot.get_channel.assert_called()  # Ensure get_channel was called for each channel
