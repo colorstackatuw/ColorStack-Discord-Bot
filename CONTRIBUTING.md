@@ -23,7 +23,7 @@ before any PR. We like to discuss things before implementation. We want to be fo
 
 ## Build and Test
 
-ColorStack-Discord-Bot is a Python-based project that uses Docker to run the service, so make sure to have Docker installed on your machine. You can follow the installation guideÂ to get started. Once you have followed the installation guide, you can run the following commands to build and test the project:
+ColorStack-Discord-Bot is a Python-based project that uses Docker to run the service, so make sure to have Docker installed on your machine. You can follow the [installation guide](https://github.com/colorstackatuw/ColorStack-Discord-Bot/blob/main/DOCUMENTATION.md#installation) to get started. Once you have followed the installation guide, you can run the following commands to build and test the project:
 
 To build the changes into the Docker container, you can run:
 

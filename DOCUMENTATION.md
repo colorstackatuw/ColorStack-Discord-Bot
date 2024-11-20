@@ -22,7 +22,7 @@ While the bot is running, it will review the GitHub repositories and post any ne
 1. If a new opportunity is found, the bot will process the opportunity string using `getInternships()` found in `InternshipUtilites.py` and verify:
    1. It's in the United States or Remote
    1. The job posting is from the past 7 days
-   1. The job posting is not a duplicate of a co-op internship
+   1. The job posting is not a duplicate of a co-op or internship
 1. Once the post is validated, it will be posted within all the discord servers it's apart of by getting the channels from NoSQL database.
 1. After all the processing is done, the bot will save the commit SHA in `commits/repository_links_commits.json`, sleep for 60 seconds, and repeat the process.
 
@@ -186,4 +186,4 @@ Retrieve the Summer or Co-op internships from the GitHub repository.
 
 ## DatabaseConnector
 
-This class helps connect to NoSQL database to track all servers the bot is apart of. This class will not be available to the public as it contains private infomraiton about the database.
+This class helps connect to NoSQL database to track all servers the bot is apart of. This class will not be available to the public as it contains private information about the database.
