@@ -3,11 +3,22 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Virtual environment directories
+env/
+venv/
+
 # VSCode directory
 .vscode/
 
 # Environment variables
 .env
+
+# Logs
+*.log
+*.tmp
+
+# OS-specific files
+.DS_Store
 
 commits/repository_links_commits.json
 src/DatabaseConnector.py
