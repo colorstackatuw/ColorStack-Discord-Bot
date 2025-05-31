@@ -5,7 +5,7 @@ This class provides a set of utilities to interact with GitHub repositories usin
 It includes functionalities to establish a connection to a specified GitHub repository, update and retrieve
 the last commit information, and check for new commits.
 */
-package utilities
+package crawlers
 
 import (
 	"context"

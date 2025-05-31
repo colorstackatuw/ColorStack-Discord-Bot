@@ -12,5 +12,8 @@ __pycache__/
 # Environment variables
 .env
 
+.github
+.git
+
 commits/repository_links_commits.json
 src/Utilities/DBConnector.go

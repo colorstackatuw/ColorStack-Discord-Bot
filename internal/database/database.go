@@ -1,4 +1,4 @@
-package utilities
+package database
 
 import (
 	"database/sql"
