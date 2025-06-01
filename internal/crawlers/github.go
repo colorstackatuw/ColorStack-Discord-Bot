@@ -17,7 +17,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const FILEPATH = "src/repository_links_commits.json"
+const FILEPATH = "crawlers/repository_links_commits.json"
 
 type GitHubUtilities struct {
 	RepoName   string

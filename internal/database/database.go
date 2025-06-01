@@ -1,28 +1,53 @@
 package database
 
 import (
+	log "ColorStack-Discord-Bot/internal/logger"
+	"ColorStack-Discord-Bot/internal/types"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
+	"sync"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	_ "github.com/godror/godror"
 	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
 )
 
+var (
+	once     sync.Once
+	instance ChannelsDB
+)
+
+type ChannelsDB interface {
+	WriteChannel(guildID string, guildName string, channelID string, botType types.BotType) error
+	GetChannels() ([]int64, error)
+	DeleteServer(guildID string) error
+	Close() error
+}
+
 // DatabaseService manages the connection and operations with Oracle DB.
-type DatabaseService struct {
+type Database struct {
 	conn *sql.DB
 }
 
+// Returns single version of singleton database
+func GetDatabaseInstance() ChannelsDB {
+	once.Do(func() {
+		service, err := newDatabaseService()
+		if err != nil {
+			log.Fatal("Failed to initialize database service: %v", err)
+		}
+		instance = service
+	})
+	return instance
+}
+
 // NewDatabaseService initializes a new DatabaseService instance.
-func NewDatabaseService() (*DatabaseService, error) {
+func newDatabaseService() (ChannelsDB, error) {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading environment variables: %v", err)
+		log.Fatal("Error loading environment variables: %v", err)
 	}
 
 	// Retrieve Oracle DB credentials from environment variables
@@ -41,28 +66,40 @@ func NewDatabaseService() (*DatabaseService, error) {
 		return nil, errors.Wrap(err, "Couldn't connect to oracle database!")
 	}
 
-	return &DatabaseService{conn: conn}, nil
+	return &Database{conn: conn}, nil
 }
 
 // WriteChannel inserts the channel data into the Oracle database.
-func (db *DatabaseService) WriteChannel(guild *discordgo.Guild, channel *discordgo.Channel) error {
+func (db *Database) WriteChannel(
+	guildID string,
+	guildName string,
+	channelID string,
+	botType types.BotType,
+) error {
 	query := `
-		INSERT INTO DISCORD.DIM_DISCORD_TOKENS 
-		(server_id, join_date, server_name, channel_id) 
-		VALUES (:1, :2, :3, :4)
+		INSERT INTO dim_server 
+		(server_id, join_date, server_name, channel_id, bot_type) 
+		VALUES (:1, :2, :3, :4, :5)
 	`
-
-	_, err := db.conn.Exec(query, guild.ID, time.Now(), guild.Name, channel.ID)
+	_, err := db.conn.Exec(query, guildID, time.Now(), guildName, channelID, string(botType))
 	if err != nil {
+		msg := fmt.Sprintf(
+			"Failed to insert channel into database! GuildID: %s, ChannelID: %s",
+			guildID,
+			channelID,
+		)
+		log.Error(msg, err)
 		return errors.Wrap(err, "Couldn't write channel to db")
-	} else {
-		return nil
 	}
+
+	log.Info("Collected channel!")
+	return nil
 }
 
 // GetChannels retrieves all unique channel IDs from the Oracle database.
-func (db *DatabaseService) GetChannels() ([]int64, error) {
-	query := "SELECT DISTINCT channel_id FROM DISCORD.DIM_DISCORD_TOKENS"
+func (db *Database) GetChannels() ([]int64, error) {
+	query := "SELECT DISTINCT channel_id FROM dim_server"
+
 	rows, err := db.conn.Query(query)
 	if err != nil {
 		return nil, err
@@ -78,17 +115,30 @@ func (db *DatabaseService) GetChannels() ([]int64, error) {
 		}
 		channelIDs = append(channelIDs, channelID)
 	}
+
+	msg := fmt.Sprintf("Successfully collect %d channels!", len(channelIDs))
+	log.Info(msg)
 	return channelIDs, nil
 }
 
 // DeleteServer removes all records associated with a specific server from the Oracle database.
-func (db *DatabaseService) DeleteServer(guild *discordgo.Guild) error {
-	query := "DELETE FROM DISCORD.DIM_DISCORD_TOKENS WHERE server_id = :1"
+func (db *Database) DeleteServer(guildID string) error {
+	query := "DELETE FROM dim_server WHERE server_id = :1"
 
-	_, err := db.conn.Exec(query, guild.ID)
+	_, err := db.conn.Exec(query, guildID)
 	if err != nil {
+		msg := fmt.Sprintf("Failed to insert channel into database! GuildID: %s", guildID)
+		log.Error(msg, err)
 		errors.Wrap(err, "Failed to delete server!")
 	}
 
+	log.Info("Successfully deleted channel")
 	return nil
 }
+
+func (d *Database) Close() error {
+	return d.conn.Close()
+}
+
+// Assert Database implements ChannelsDB interface
+var _ ChannelsDB = (*Database)(nil)

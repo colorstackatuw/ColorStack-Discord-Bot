@@ -38,3 +38,8 @@ func Error(msg string, err error) {
 func Fatal(msg string, err error) {
 	log.Fatal().Stack().Err(err).Msg(msg)
 }
+
+// Debug logging
+func Debug(msg string) {
+	log.Debug().Msg(msg)
+}
