@@ -4,7 +4,6 @@ import (
 	"ColorStack-Discord-Bot/internal/crawler"
 	"ColorStack-Discord-Bot/internal/database"
 	log "ColorStack-Discord-Bot/internal/logger"
-	"ColorStack-Discord-Bot/internal/types"
 	"context"
 	"fmt"
 	"os"
@@ -158,7 +157,7 @@ func onGuildJoin(s *discordgo.Session, event *discordgo.GuildCreate) {
 		var guildName string = event.Guild.Name
 		var guildID string = event.Guild.ID
 		var channelName string = channel.ID
-		oracleClient.WriteChannel(guildID, guildName, channelName, types.DISCORD)
+		oracleClient.WriteChannel(guildID, guildName, channelName, DISCORD)
 
 		if _, err := s.ChannelMessageSend(channel.ID, "Hello! I am the ColorStack Bot. I will be posting new job opportunities here."); err != nil {
 			logMsg := fmt.Sprintf("Channel: %s failed to send welcome message", channel.ID)

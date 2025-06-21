@@ -8,30 +8,35 @@ the last commit information, and check for new commits.
 package crawler
 
 import (
-	"ColorStack-Discord-Bot/internal/crawler"
+	"ColorStack-Discord-Bot/internal/database"
 	log "ColorStack-Discord-Bot/internal/logger"
-	"ColorStack-Discord-Bot/src/utilities"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/go-github/v59/github"
 	"github.com/pkg/errors"
-	"github.com/redis/go-redis/v9"
 )
 
 var FILEPATH = "crawlers/repository_links_commits.json"
+var NOTUS [4]string = [4]string{"canada", "uk", "united kingdom", "eu"}
+var readMeFile = map[JobType]string{
+	NEWGRAD: "New Grad",
+	SUMMER:  "Summer",
+	COOP:    "Co-Op",
+}
 
 type GitHubUtilities struct {
 	RepoName   string
 	GitHub     *github.Client
-	Comparison *github.CommitsComparison
-	SavedSHA   string
-	IsCoop     bool
-	IsSummer   bool
+	JobType    *JobType
+	comparison *github.CommitsComparison
+	savedSHA   string
 }
 
 /*
@@ -42,14 +47,13 @@ Parameters:
 - RepoName: A string specifying the name of the GitHub repository to interact with.
 Returns: A pointer to an instance of GitHubUtilities.
 */
-func NewGitHubUtilities(token, repoName string, isSummer bool, isCoop bool) *GitHubUtilities {
+func NewGitHubUtilities(token, repoName string, jobType JobType) *GitHubUtilities {
 	client := github.NewClient(nil).WithAuthToken(token)
 
 	return &GitHubUtilities{
 		RepoName: repoName,
 		GitHub:   client,
-		IsCoop:   isCoop,
-		IsSummer: isSummer,
+		JobType:  &jobType,
 	}
 }
 
@@ -62,7 +66,7 @@ Parameters:
 
 Returns: An error if saving fails, nil otherwise.
 */
-func (g *GitHubUtilities) SetNewCommit(lastCommit string, isNewGrad bool) error {
+func (g *GitHubUtilities) setNewCommit(lastCommit string, isNewGrad bool) error {
 	var key string
 	if isNewGrad {
 		key = "last_saved_sha_newgrad"
@@ -87,6 +91,17 @@ func (g *GitHubUtilities) SetNewCommit(lastCommit string, isNewGrad bool) error 
 	}
 
 	return nil
+}
+
+func (g *GitHubUtilities) IsNotUS(location string) bool {
+	lowerLocation := strings.ToLower(location)
+	for _, notUS := range NOTUS {
+		if strings.Contains(lowerLocation, notUS) {
+			return true
+		}
+	}
+
+	return false
 }
 
 /*
@@ -119,7 +134,7 @@ func (g *GitHubUtilities) SetSavedSha(isNewGrad bool) error {
 
 	msg := fmt.Sprintf("Collected SHA: %s", dataJson[key])
 	log.Debug(msg)
-	g.SavedSHA = dataJson[key]
+	g.savedSHA = dataJson[key]
 
 	return nil
 }
@@ -180,7 +195,7 @@ Parameters:
 Returns:
   - str: The last commit hexadecimal information
 */
-func (g *GitHubUtilities) GetSavedSha(
+func (g *GitHubUtilities) getSavedSha(
 	ctx context.Context,
 	repo *github.Repository,
 	isNewGrad bool,
@@ -237,7 +252,7 @@ Returns:
 
 	An error if the comparison fails, nil otherwise.
 */
-func (g *GitHubUtilities) SetComparison(
+func (g *GitHubUtilities) setComparison(
 	ctx context.Context,
 	repo *github.Repository,
 	isNewGrad bool,
@@ -245,11 +260,11 @@ func (g *GitHubUtilities) SetComparison(
 	log.Info("Retrieveing the last commit...")
 	recentCommitSha, err := g.GetLastCommit(ctx, repo)
 	if err != nil {
-		g.Comparison = nil
+		g.comparison = nil
 		return errors.Wrap(err, "Can't find last commit")
 	}
 
-	prevCommit, err := g.GetSavedSha(ctx, repo, isNewGrad)
+	prevCommit, err := g.getSavedSha(ctx, repo, isNewGrad)
 	if err != nil {
 		return errors.Wrap(err, "Couldn't get the saved SHA")
 	}
@@ -266,13 +281,13 @@ func (g *GitHubUtilities) SetComparison(
 		return errors.Wrap(err, "Can't make the commit comparisons")
 	}
 
-	g.Comparison = comparison
+	g.comparison = comparison
 	return nil
 }
 
 /* ClearComparison clears the comparison field of the GitHubUtilities struct. */
-func (g *GitHubUtilities) ClearComparison() {
-	g.Comparison = nil
+func (g *GitHubUtilities) clearComparison() {
+	g.comparison = nil
 }
 
 /*
@@ -284,7 +299,7 @@ Returns:
 - A boolean indicating whether the given commit SHA is new (true) or not (false).
 - An error if retrieving the saved commit SHA fails, nil otherwise.
 */
-func (g *GitHubUtilities) IsNewCommit(
+func (g *GitHubUtilities) isNewCommit(
 	ctx context.Context,
 	repo *github.Repository,
 	savedSHA string,
@@ -297,17 +312,16 @@ func (g *GitHubUtilities) IsNewCommit(
 	return savedSHA != lastCommit, nil
 }
 
-func (g *GitHubUtilities) GetCommitChanges(readmeFile string) <-chan string {
-	channel := make(chan string)
+func (g *GitHubUtilities) GetJobs(jobType JobType, jobsChannel <-chan JobType) {
+	var readmeFile string = readMeFile[jobType]
 
 	go func() {
-		defer close(channel)
 
-		if g.Comparison == nil {
+		if g.comparison == nil {
 			return
 		}
 
-		for _, file := range g.Comparison.Files {
+		for _, file := range g.comparison.Files {
 			if file.GetFilename() == readmeFile {
 				commitAdditions := file.GetPatch()
 				if commitAdditions == "" {
@@ -319,6 +333,9 @@ func (g *GitHubUtilities) GetCommitChanges(readmeFile string) <-chan string {
 						!strings.Contains(line, "🔒") {
 						msg := fmt.Sprintf("Collected Github line: %s", line)
 						log.Debug(msg)
+
+						// Formatting Job
+						g.parseJobPosting(line)
 						channel <- line
 					}
 				}
@@ -330,38 +347,170 @@ func (g *GitHubUtilities) GetCommitChanges(readmeFile string) <-chan string {
 	return channel
 }
 
+func (g *GitHubUtilities) parseJobPosting(
+	jobLine string,
+	prevJobTitle string,
+	season JobType,
+) string {
+	var companyName, jobTitle, jobLink, terms, location string
+	var listLocations []string
+	var jobLinkIndex int = 4
+	if season == COOP {
+		jobLinkIndex = 5
+	}
+
+	// Grab data and remove the empty elements
+	elements := strings.Split(jobLine, "|")
+	nonEmptyElements := make([]string, 0)
+	for _, element := range elements {
+		if strings.TrimSpace(element) != "" {
+			nonEmptyElements = append(nonEmptyElements, strings.TrimSpace(element))
+		}
+	}
+
+	// If job link is already in cache or redis db,  we skip the job
+	re, err := regexp.Compile(`href="([^"]+)"`)
+	if err != nil {
+		log.Info("There is no job link within the job posting")
+		return ""
+	}
+	matches := re.FindStringSubmatch(nonEmptyElements[jobLinkIndex])
+	if len(matches) < 2 {
+		log.Info("Could not find job link within github line")
+	}
+	jobLink = matches[1]
+
+	redisClient := database.GetRedisInstance()
+	if _, err := redisClient.Ping(); err != nil {
+		log.Error("Cannot connect to the redis database", err)
+		return ""
+	} else {
+		log.Info("We have connected to the Redis Database!")
+	}
+	defer redisClient.Close()
+
+	urlExists, err := redisClient.CheckURL(jobLink)
+	if urlExists {
+		logMsg := fmt.Sprintf("It already exists within the database %v", urlExists)
+		log.Info(logMsg)
+		return ""
+	}
+
+	// If the company name is not present, we need to use the previous company name
+	if !strings.Contains(nonEmptyElements[1], "↳") {
+		jobHeader := nonEmptyElements[1]
+		startPos := strings.Index(jobHeader, "[") + 1
+		endPos := strings.Index(jobHeader[startPos:], "]") + startPos
+
+		if startPos > 0 && endPos > 0 {
+			companyName = jobHeader[startPos:endPos]
+		} else {
+			companyName = jobHeader
+		}
+	} else {
+		companyName = prevJobTitle
+	}
+	prevJobTitle = companyName
+
+	// We need to check that the position is within the US or remote
+	locationHTML := nonEmptyElements[3]
+	if strings.Contains(locationHTML, "<details>") {
+		start := strings.Index(locationHTML, "</summary>") + len("</summary>")
+		end := strings.Index(locationHTML, "</details>")
+		if start >= 0 && end >= 0 {
+			locationsContent := locationHTML[start:end]
+			locations := strings.Split(locationsContent, "</br>")
+			for _, location := range locations {
+				location = strings.TrimSpace(location)
+				if location != "" && !g.IsNotUS(location) {
+					listLocations = append(listLocations, location)
+				}
+			}
+		}
+	} else if strings.Contains(locationHTML, "</br>") {
+		locations := strings.Split(locationHTML, "</br>")
+		for _, location := range locations {
+			location = strings.TrimSpace(location)
+			if location != "" && !g.IsNotUS(location) {
+				listLocations = append(listLocations, location)
+			}
+		}
+	} else if locationHTML != "" {
+		var location string = "Remote"
+		if !strings.Contains(strings.ToLower(locationHTML), "remote") && !g.IsNotUS(locationHTML) {
+			location = locationHTML
+		}
+		listLocations = append(listLocations, location)
+	}
+
+	log.Debug("List of locations")
+	if len(listLocations) >= 1 {
+		location = strings.Join(listLocations, " | ")
+	} else {
+		log.Info("No locations found!")
+		return ""
+	}
+
+	currentYear := time.Now().Year()
+	if season == SUMMER {
+		terms = "Summer " + strconv.Itoa(currentYear)
+	} else if season == COOP {
+		terms = strings.Join(strings.Split(nonEmptyElements[4], ","), " |")
+	}
+
+	jobTitle = nonEmptyElements[2]
+	var post strings.Builder
+	datePosted := nonEmptyElements[len(nonEmptyElements)-1]
+	post.WriteString(fmt.Sprintf("**📅 Date Posted:** %s\n", datePosted))
+	post.WriteString(fmt.Sprintf("**ℹ️ Company:** __%s__\n", companyName))
+	post.WriteString(fmt.Sprintf("**👨‍💻 Job Title:** %s\n", jobTitle))
+	post.WriteString(fmt.Sprintf("**📍 Location:** %s\n", location))
+	if season != NEWGRAD {
+		post.WriteString(fmt.Sprintf("**➡️  When?:**  %s\n", terms))
+	}
+	post.WriteString(
+		fmt.Sprintf("**👉 Job Link:** <%s>\n%s\n", jobLink, strings.Repeat("-", 153)),
+	)
+
+	// Update the Redis Database
+	if err := redisClient.WriteURL(jobLink); err != nil {
+		log.Error("Failed to update Redis DB", err)
+		return errors.Wrap(err, "Failed to update the Redis DB")
+	}
+
+	return post
+}
+
 /*
 processJobs performs a periodic task to check for new GitHub commits and post new job opportunities.
 
 Parameters:
 - ctx: A context.Context object for managing cancellations and timeouts.
-- githubUtilities: A internship pointer to a utilities.GitHubUtilities for interacting with GitHub.
-- newgradUtilities: A new grad pointer to a utilities.GitHubUtilities for interacting with GitHub.
-- jobUtilities: A pointer to a utilities.jobUtilities for handling internship postings.
 Returns: None.
 */
-func GetJobs(ctx context.Context,
-	repo *crawler.GitHubUtilities,
-	isNewGrad bool,
-	jobUtilities *utilities.JobUtilities,
-) {
+func (g *GitHubUtilities) GetJobPostings(ctx context.Context, jobType JobType) {
 	// Open Connection
 	log.Info("Connecting to github repos...")
-	internshipRepo, err := repo.CreateGitHubConnection(ctx)
+	var isNewGrad bool = false
+	repo, err := g.CreateGitHubConnection(ctx)
 	if err != nil {
 		log.Error("Failed to create GitHub connection for internship jobs", err)
 		return
 	}
 
-	// Get commit numbers
-	repoSHA, err := repo.GetSavedSha(ctx, repo, isNewGrad)
+	if jobType == NEWGRAD {
+		isNewGrad = true
+	}
+
+	// Get commit SHA
+	savedSHA, err := g.getSavedSha(ctx, repo, isNewGrad)
 	if err != nil {
 		log.Error("Failed to get internship SHA", err)
 		return
 	}
 
 	// Collect any new internship or newgrad jobs
-	isNewJobs, err := repo.IsNewCommit(ctx, repo, repoSHA)
+	isNewJobs, err := g.isNewCommit(ctx, repo, savedSHA)
 	if err != nil {
 		log.Error("Failed to get the new internship commit", err)
 		return
@@ -373,133 +522,45 @@ func GetJobs(ctx context.Context,
 	}
 
 	// Set up Redis Database
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-	})
-
-	if _, err := redisClient.Ping(ctx).Result(); err != nil {
+	redisClient := database.GetRedisInstance()
+	if _, err := redisClient.Ping(); err != nil {
 		log.Error("Cannot connect to the redis database", err)
+		return
 	} else {
 		log.Info("We have connected to the Redis Database!")
 	}
 	defer redisClient.Close()
 
 	// Set up Oracle db
-	oracleClient, err := utilities.NewDatabaseService()
-	if err != nil {
-		log.Error("Cannot connect to oracle db", err)
-	}
+	oracleClient := database.GetDatabaseInstance()
 	defer oracleClient.Close()
 
-	if isNewInternships {
-		log.Info("New commit has been found. Finding new internship jobs...")
-		internshipGithub.SetComparison(ctx, internshipRepo, false)
+	log.Info("New commit has been found. Finding new jobs...")
+	g.setComparison(ctx, repo, isNewGrad)
 
-		channelIDs, err := oracleClient.GetChannels()
-		if err != nil {
-			log.Error("Failed to get channel IDs", err)
-		}
-
-		if internshipGithub.IsCoop {
-			jobPostings := internshipGithub.GetCommitChanges("README-Off-Season.md")
-			err := jobUtilities.GetJobs(
-				ctx,
-				bot,
-				channelIDs[:20],
-				jobPostings,
-				"Co-Op",
-				redisClient,
-			)
-			if err != nil {
-				log.Error("Issue collecting jobs", err)
-			}
-		}
-
-		if internshipGithub.IsSummer {
-			jobPostings := internshipGithub.GetCommitChanges("README.md")
-			err := jobUtilities.GetJobs(
-				ctx,
-				bot,
-				channelIDs[:20],
-				jobPostings,
-				"Summer",
-				redisClient,
-			)
-			if err != nil {
-				log.Error("Issue collecting jobs", err)
-			}
-		}
-
-		// Update the saved commit SHA
-		sha_commit, err := internshipGithub.GetLastCommit(ctx, internshipRepo)
-		if err != nil {
-			log.Error("Failed to get the latest commit!", err)
-		}
-
-		if err := internshipGithub.SetNewCommit(sha_commit, false); err != nil {
-			log.Error("Failed to set the new commit", err)
-		}
-
-		logMsg := fmt.Sprintf("New %d jobs found!", jobUtilities.TotalJobs)
-		log.Info(logMsg)
-
-		jobUtilities.ClearJobLinks()
-		jobUtilities.ClearJobCounter()
-		internshipGithub.ClearComparison()
-
-		log.Info("All internship jobs have been posted!")
-	} else {
-		log.Info("No new internship commits found.")
+	channelIDs, err := oracleClient.GetChannels()
+	if err != nil {
+		log.Error("Failed to get channel IDs", err)
 	}
 
-	if isNewJobs {
-		log.Info("New commit has been found. Finding new grad jobs...")
-		newgradGithub.SetComparison(ctx, newgradRepo, true)
+	jobPostings := g.getCommitChanges(jobType)
 
-		channelIDs, err := oracleClient.GetChannels()
-		if err != nil {
-			log.Error("Failed to get channel IDs", err)
-		}
-
-		jobPostings := internshipGithub.GetCommitChanges("README.md")
-		err = jobUtilities.GetJobs(
-			ctx,
-			bot,
-			channelIDs[:20],
-			jobPostings,
-			"New Grad",
-			redisClient,
-		)
-		if err != nil {
-			log.Error("Issue collecting jobs", err)
-		}
-
-		// Update the saved commit SHA
-		sha_commit, err := newgradGithub.GetLastCommit(ctx, newgradRepo)
-		if err != nil {
-			log.Error("Failed to get the latest commit!", err)
-		}
-
-		if err := newgradGithub.SetNewCommit(sha_commit, true); err != nil {
-			log.Error("Failed to set the new commit", err)
-		}
-
-		logMsg := fmt.Sprintf("New %d jobs found!", jobUtilities.TotalJobs)
-		log.Info(logMsg)
-
-		jobUtilities.ClearJobLinks()
-		jobUtilities.ClearJobCounter()
-		internshipGithub.ClearComparison()
-
-		log.Info("All new grad jobs have been posted!")
-	} else {
-		log.Info("No new new grad commits found.")
+	if err != nil {
+		log.Error("Issue collecting jobs", err)
+		return
 	}
 
-	endTime := time.Now()
-	executionTime := endTime.Sub(startTime).Seconds()
-	logMsg := fmt.Sprintf("Execution Time: %.2f seconds", executionTime)
+	// Save latest commit on repo
+	sha_commit, err := g.getLastCommit(ctx, repo)
+	if err != nil {
+		log.Error("Failed to get the latest commit!", err)
+	}
+
+	if err := g.setNewCommit(sha_commit, false); err != nil {
+		log.Error("Failed to set the new commit", err)
+	}
+
+	logMsg := fmt.Sprintf("New %d jobs found!")
 	log.Info(logMsg)
+
 }

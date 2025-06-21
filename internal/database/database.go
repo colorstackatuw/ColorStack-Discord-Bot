@@ -74,7 +74,7 @@ func (db *Database) WriteChannel(
 	guildID string,
 	guildName string,
 	channelID string,
-	botType types.BotType,
+	botType BotType,
 ) error {
 	query := `
 		INSERT INTO dim_server 
@@ -136,6 +136,7 @@ func (db *Database) DeleteServer(guildID string) error {
 	return nil
 }
 
+// Close connection to database
 func (d *Database) Close() error {
 	return d.conn.Close()
 }

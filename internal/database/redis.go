@@ -61,3 +61,13 @@ func (rdb *RedisClient) WriteURL(url string) error {
 func (rdb *RedisClient) DeleteURL(url string) error {
 	return rdb.conn.Del(ctx, url).Err()
 }
+
+// Ping database to make sure connection is active
+func (rdb *RedisClient) Ping() (http string, error error) {
+	return rdb.conn.Ping(ctx).Result()
+}
+
+// Close database
+func (rdb *RedisClient) Close() (error error) {
+	return rdb.conn.Close()
+}
