@@ -60,8 +60,7 @@ func main() {
 		log.Error("error opening connection", err)
 	}
 
-	// Shut down bot when there is CTRL-C or OS interruption
-	defer bot.Close()
+
 
 	// Wait here until CTRL-C or other term signal is received
 	log.Info("Bot is now running. Press CTRL+C to exit.")
@@ -70,6 +69,15 @@ func main() {
 	<-stop
 
 	log.Info("Shutting down...")
+
+	// when CTRL-C or OS interruption
+	db := database.GetDatabaseInstance()
+	// (1) first close database
+	if (db != nil) {
+		db.Close()
+	}
+	// (2) than close bot
+	bot.Close()
 }
 
 /*
@@ -189,7 +197,9 @@ func onGuildRemove(s *discordgo.Session, event *discordgo.GuildDelete) {
 
 	// Connecting to oracle database
 	oracleClient := database.GetDatabaseInstance()
-	defer oracleClient.Close()
+	
+	// removed defer, because connection pools are not meant to close
+	// instead moved a defer function to the main method
 
 	var guildID string = event.Guild.ID
 	if err := oracleClient.DeleteServer(guildID); err != nil {
