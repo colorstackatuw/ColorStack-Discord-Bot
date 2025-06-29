@@ -1,11 +1,11 @@
-package crawler
+package types
 
 type JobType string
 
 const (
-	NEWGRAD JobType = "New Grad"
-	SUMMER  JobType = "Summer"
-	COOP    JobType = "Co-Op"
+	NEWGRAD    JobType = "New Grad"
+	INTERNSHIP JobType = "Summer"
+	COOP       JobType = "Co-Op"
 )
 
 type Job struct {

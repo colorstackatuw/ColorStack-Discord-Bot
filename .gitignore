@@ -15,5 +15,4 @@ __pycache__/
 .github
 .git
 
-commits/repository_links_commits.json
-src/Utilities/DBConnector.go
+internal/crawler/respository_commits.json

@@ -2,6 +2,7 @@ package crawler_test
 
 import (
 	"ColorStack-Discord-Bot/internal/crawler"
+	jobsType "ColorStack-Discord-Bot/internal/types"
 	"context"
 	"encoding/json"
 	"os"
@@ -53,7 +54,7 @@ func TestSetSavedSha(t *testing.T) {
 func TestCreateGitHubConnection(t *testing.T) {
 	token := "dummy"
 	repoName := "fake-repo"
-	util := crawler.NewGitHubUtilities(token, repoName, false, false)
+	util := crawler.NewGitHubUtilities(token, repoName, jobsType.COOP)
 
 	ctx := context.Background()
 	_, err := util.CreateGitHubConnection(ctx)
@@ -63,7 +64,9 @@ func TestCreateGitHubConnection(t *testing.T) {
 }
 
 func TestGetLastCommit_Failure(t *testing.T) {
-	util := crawler.NewGitHubUtilities("", "invalid-repo", false, false)
+	token := "dummy"
+	repoName := "invalid-repo"
+	util := crawler.NewGitHubUtilities(token, repoName, jobsType.COOP)
 
 	ctx := context.Background()
 	repo := &github.Repository{
@@ -75,7 +78,9 @@ func TestGetLastCommit_Failure(t *testing.T) {
 }
 
 func TestIsNewCommit(t *testing.T) {
-	util := crawler.NewGitHubUtilities("", "invalid-repo", false, false)
+	token := "dummy"
+	repoName := "invalid-repo"
+	util := crawler.NewGitHubUtilities(token, repoName, jobsType.COOP)
 
 	ctx := context.Background()
 	repo := &github.Repository{
@@ -102,7 +107,9 @@ func TestGetCommitChanges(t *testing.T) {
 	}
 
 	results := []string{}
-	for line := range util.GetCommitChanges("README.md") {
+	jobsChannel := make(chan string)
+	go util.GetJobs(jobsType.NEWGRAD, jobsChannel)
+	for line := range jobsChannel {
 		results = append(results, line)
 	}
 

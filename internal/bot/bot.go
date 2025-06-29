@@ -1,8 +1,7 @@
 package bot
 
-type BotType string
-
-const (
-	SLACK   BotType = "slack"
-	DISCORD BotType = "discord"
-)
+type Bot interface {
+	Start() error
+	Shutdown() error
+	SendMessage(channelID, message string) error
+}

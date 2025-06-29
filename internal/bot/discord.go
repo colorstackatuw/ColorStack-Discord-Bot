@@ -1,25 +1,22 @@
 package bot
 
 import (
-	"ColorStack-Discord-Bot/internal/crawler"
 	"ColorStack-Discord-Bot/internal/database"
 	log "ColorStack-Discord-Bot/internal/logger"
-	"context"
+	"ColorStack-Discord-Bot/internal/types"
 	"fmt"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
 )
 
-var (
-	mutex sync.Mutex
-	bot   *discordgo.Session
-)
+type DiscordBot struct {
+	session *discordgo.Session
+}
+
+var mutex sync.Mutex
 
 /*
 init loads environment variables from .env file.
@@ -35,42 +32,39 @@ func init() {
 	}
 }
 
-/*
-main: Starts the main method of collecting jobs
-
-Returns: None.
-*/
-func main() {
+// Create a new bot
+func NewDiscordBot(token string) (*DiscordBot, error) {
 	discordToken := os.Getenv("DISCORD_TOKEN")
 	if discordToken == "" {
 		log.Fatal("Error loading discord token", nil)
 	}
 
-	bot, err := discordgo.New("Bot " + discordToken)
+	session, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
-		log.Error("error creating Discord session", err)
+		log.Fatal("error creating Discord session", err)
 	}
 
-	bot.AddHandler(onGuildJoin)
-	bot.AddHandler(onGuildRemove)
-	bot.AddHandler(onReady)
+	session.AddHandler(onGuildJoin)
+	session.AddHandler(onGuildRemove)
+	session.AddHandler(onReady)
 
-	err = bot.Open()
-	if err != nil {
-		log.Error("error opening connection", err)
-	}
+	return &DiscordBot{session: session}, err
 
-	// Shut down bot when there is CTRL-C or OS interruption
-	defer bot.Close()
+}
 
-	// Wait here until CTRL-C or other term signal is received
-	log.Info("Bot is now running. Press CTRL+C to exit.")
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-stop
+func (b *DiscordBot) Start() error {
+	return b.session.Open()
+}
 
-	log.Info("Shutting down...")
 
+func (b *DiscordBot) Shutdown() error {
+	return b.session.Close()
+}
+
+func (b *DiscordBot) SendMessage(channelID, message string) error {
+	_, err := b.session.ChannelMessageSend(channelID, message)
+	return err
+>>>>>>> e5eb788 (Discord Bot implementation)
 }
 
 /*
@@ -83,33 +77,8 @@ Parameters:
 Returns: None.
 */
 func onReady(s *discordgo.Session, event *discordgo.Ready) {
-	logMsg := fmt.Sprintf("Username: %s logged in", s.State.User.Username)
+	logMsg := fmt.Sprintf("Username: %s is signed into the channel!", s.State.User.Username)
 	log.Info(logMsg)
-
-	githubToken := os.Getenv("GIT_TOKEN")
-	if githubToken == "" {
-		log.Fatal("Error loading discord token", nil)
-	}
-
-	internshipGithub := crawler.NewGitHubUtilities(
-		githubToken,
-		"Summer2025-Internships",
-		true,
-		true,
-	)
-	newgradGithub := crawler.NewGitHubUtilities(
-		githubToken,
-		"New-Grad-Positions",
-		false,
-		false,
-	)
-	jobUtilities := crawler.NewJobUtilities()
-
-	ctx := context.Background()
-	// Schedule process for all the jobs
-	for range time.Tick(120 * time.Second) {
-		processJobs(ctx, internshipGithub, newgradGithub, jobUtilities)
-	}
 }
 
 /*
@@ -158,7 +127,7 @@ func onGuildJoin(s *discordgo.Session, event *discordgo.GuildCreate) {
 		var guildName string = event.Guild.Name
 		var guildID string = event.Guild.ID
 		var channelName string = channel.ID
-		oracleClient.WriteChannel(guildID, guildName, channelName, DISCORD)
+		oracleClient.WriteChannel(guildID, guildName, channelName, types.DISCORD)
 
 		if _, err := s.ChannelMessageSend(channel.ID, "Hello! I am the ColorStack Bot. I will be posting new job opportunities here."); err != nil {
 			logMsg := fmt.Sprintf("Channel: %s failed to send welcome message", channel.ID)
@@ -191,8 +160,6 @@ func onGuildRemove(s *discordgo.Session, event *discordgo.GuildDelete) {
 	// Connecting to oracle database
 	oracleClient := database.GetDatabaseInstance()
 	
-	// removed defer, because connection pools are not meant to close
-	// instead moved a defer function to the main method
 
 	var guildID string = event.Guild.ID
 	if err := oracleClient.DeleteServer(guildID); err != nil {
@@ -200,3 +167,5 @@ func onGuildRemove(s *discordgo.Session, event *discordgo.GuildDelete) {
 		log.Error(logMsg, err)
 	}
 }
+
+var _ Bot = (*DiscordBot)(nil)

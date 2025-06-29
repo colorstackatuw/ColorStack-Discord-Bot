@@ -20,7 +20,7 @@ var (
 )
 
 type ChannelsDB interface {
-	WriteChannel(guildID string, guildName string, channelID string, botType types.BotType) error
+	WriteChannel(guildID string, guildName string, channelID string, botType types.Bot) error
 	GetChannels() ([]int64, error)
 	DeleteServer(guildID string) error
 	Close() error
@@ -79,7 +79,7 @@ func (db *Database) WriteChannel(
 	guildID string,
 	guildName string,
 	channelID string,
-	botType BotType,
+	botType types.Bot,
 ) error {
 	query := `
 		INSERT INTO dim_server 
