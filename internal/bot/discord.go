@@ -60,7 +60,8 @@ func main() {
 		log.Error("error opening connection", err)
 	}
 
-
+	// Shut down bot when there is CTRL-C or OS interruption
+	defer bot.Close()
 
 	// Wait here until CTRL-C or other term signal is received
 	log.Info("Bot is now running. Press CTRL+C to exit.")
@@ -70,14 +71,6 @@ func main() {
 
 	log.Info("Shutting down...")
 
-	// when CTRL-C or OS interruption
-	db := database.GetDatabaseInstance()
-	// (1) first close database
-	if (db != nil) {
-		db.Close()
-	}
-	// (2) than close bot
-	bot.Close()
 }
 
 /*
