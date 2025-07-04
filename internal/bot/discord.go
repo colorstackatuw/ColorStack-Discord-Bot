@@ -56,15 +56,13 @@ func (b *DiscordBot) Start() error {
 	return b.session.Open()
 }
 
-
 func (b *DiscordBot) Shutdown() error {
 	return b.session.Close()
 }
 
-func (b *DiscordBot) SendMessage(channelID int64, message string) error {
+func (b *DiscordBot) SendMessage(channelID, message string) error {
 	_, err := b.session.ChannelMessageSend(string(channelID), message)
 	return err
->>>>>>> e5eb788 (Discord Bot implementation)
 }
 
 /*
@@ -159,7 +157,6 @@ func onGuildRemove(s *discordgo.Session, event *discordgo.GuildDelete) {
 
 	// Connecting to oracle database
 	oracleClient := database.GetDatabaseInstance()
-	
 
 	var guildID string = event.Guild.ID
 	if err := oracleClient.DeleteServer(guildID); err != nil {
