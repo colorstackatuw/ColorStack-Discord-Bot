@@ -1,15 +1,5 @@
 version: "3.8"
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile.debug
-    ports:
-      - "3000:3000"
-      - "4000:4000"
-    depends_on:
-      - redis 
-
   main:
     build: .
     image: mybot:latest

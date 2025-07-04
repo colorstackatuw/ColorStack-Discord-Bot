@@ -13,7 +13,7 @@ func init() {
 	// Create the logger and location
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	lj := &lumberjack.Logger{
-		Filename:   "discord_bot.log",
+		Filename:   "../../cmd/app/discord_bot.log",
 		MaxSize:    10,
 		MaxBackups: 3,
 		MaxAge:     28,

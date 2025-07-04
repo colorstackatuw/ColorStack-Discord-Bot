@@ -4,19 +4,20 @@ import (
 	"ColorStack-Discord-Bot/internal/database"
 	log "ColorStack-Discord-Bot/internal/logger"
 	"ColorStack-Discord-Bot/internal/types"
+	"fmt"
 	"sync"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
 )
 
-var mutex sync.Mutex
-
 type SlackBot struct {
 	client    *slack.Client
 	socket    *socketmode.Client
 	botUserID string
 }
+
+var slackMutex sync.Mutex
 
 // NewSlackBot initializes a new SlackBot instance
 func NewSlackBot(botToken, appToken string, enableDebug bool) (*SlackBot, error) {
@@ -73,10 +74,8 @@ func (b *SlackBot) SendMessage(channelID, message string) error {
 
 // onChannelJoin handles logic when the bot joins a new channel
 func (b *SlackBot) onChannelJoin(ev *slack.ChannelJoinedEvent) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	log.Info("Slack bot joined a new channel.")
+	slackMutex.Lock()
+	defer slackMutex.Unlock()
 
 	oracleClient := database.GetDatabaseInstance()
 	defer oracleClient.Close()
@@ -84,6 +83,9 @@ func (b *SlackBot) onChannelJoin(ev *slack.ChannelJoinedEvent) {
 	channel := ev.Channel
 	channelID := channel.ID
 	channelName := channel.Name
+
+	msg := fmt.Sprintf("Slack bot joined a new channel: %s", channel.Name)
+	log.Info(msg)
 
 	err := oracleClient.WriteChannel(channelID, channelName, channelID, types.SLACK)
 	if err != nil {
@@ -98,8 +100,8 @@ func (b *SlackBot) onChannelJoin(ev *slack.ChannelJoinedEvent) {
 
 // onChannelLeave handles logic when the bot is removed from a channel
 func (b *SlackBot) onChannelLeave(ev *slack.MemberLeftChannelEvent) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	slackMutex.Lock()
+	defer slackMutex.Unlock()
 
 	log.Info("Slack bot removed from a channel.")
 

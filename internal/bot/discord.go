@@ -16,7 +16,7 @@ type DiscordBot struct {
 	session *discordgo.Session
 }
 
-var mutex sync.Mutex
+var discordMutex sync.Mutex
 
 /*
 init loads environment variables from .env file.
@@ -33,7 +33,7 @@ func init() {
 }
 
 // Create a new bot
-func NewDiscordBot(token string) (*DiscordBot, error) {
+func NewDiscordBot() *DiscordBot {
 	discordToken := os.Getenv("DISCORD_TOKEN")
 	if discordToken == "" {
 		log.Fatal("Error loading discord token", nil)
@@ -48,7 +48,7 @@ func NewDiscordBot(token string) (*DiscordBot, error) {
 	session.AddHandler(onGuildRemove)
 	session.AddHandler(onReady)
 
-	return &DiscordBot{session: session}, err
+	return &DiscordBot{session: session}
 
 }
 
@@ -61,8 +61,8 @@ func (b *DiscordBot) Shutdown() error {
 	return b.session.Close()
 }
 
-func (b *DiscordBot) SendMessage(channelID, message string) error {
-	_, err := b.session.ChannelMessageSend(channelID, message)
+func (b *DiscordBot) SendMessage(channelID int64, message string) error {
+	_, err := b.session.ChannelMessageSend(string(channelID), message)
 	return err
 >>>>>>> e5eb788 (Discord Bot implementation)
 }
@@ -90,8 +90,8 @@ Parameters:
 Returns: None.
 */
 func onGuildJoin(s *discordgo.Session, event *discordgo.GuildCreate) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	discordMutex.Lock()
+	defer discordMutex.Unlock()
 	log.Info("Request coming in to join server")
 
 	if len(s.State.Guilds) <= 20 {
@@ -152,8 +152,8 @@ Parameters:
 Returns: None.
 */
 func onGuildRemove(s *discordgo.Session, event *discordgo.GuildDelete) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	discordMutex.Lock()
+	defer discordMutex.Unlock()
 	logMsg := fmt.Sprintf("Guild: %s The bot has been removed from a server", event.Guild.ID)
 	log.Info(logMsg)
 

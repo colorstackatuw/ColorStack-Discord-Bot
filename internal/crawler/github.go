@@ -21,16 +21,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
+
 	"github.com/google/go-github/v59/github"
 	"github.com/pkg/errors"
 )
 
-var FILEPATH = "crawlers/repository_links_commits.json"
-var NOTUS [4]string = [4]string{"canada", "uk", "united kingdom", "eu"}
-var readMeFile = map[types.JobType]string{
-	jobTypes.NEWGRAD:    "README.md",
-	jobTypes.INTERNSHIP: "README.md",
-	jobTypes.COOP:       "README-Off-Season.md",
+type ReadMeInfo struct {
+	ReadMeName string
+	RepoName   string
 }
 
 type GitHubUtilities struct {
@@ -41,6 +40,22 @@ type GitHubUtilities struct {
 	SavedSHA   string
 }
 
+var FILEPATH = "crawlers/repository_links_commits.json"
+var NOTUS [4]string = [4]string{"canada", "uk", "united kingdom", "eu"}
+var readMeFile = map[types.JobType]ReadMeInfo{
+	jobTypes.NEWGRAD:    {ReadMeName: "README.md", RepoName: "New-Grad-Positions"},
+	jobTypes.INTERNSHIP: {ReadMeName: "README.md", RepoName: "Summer2025-Internships"},
+	jobTypes.COOP:       {ReadMeName: "README-Off-Season.md", RepoName: "Summer2025-Internships"},
+}
+
+func init() {
+	// Loads the .env fies
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file", err)
+	}
+}
+
 /*
 NewGitHubUtilities creates and returns a new instance of GitHubUtilities.
 
@@ -49,11 +64,15 @@ Parameters:
 - RepoName: A string specifying the name of the GitHub repository to interact with.
 Returns: A pointer to an instance of GitHubUtilities.
 */
-func NewGitHubUtilities(token, repoName string, jobType types.JobType) *GitHubUtilities {
-	client := github.NewClient(nil).WithAuthToken(token)
+func NewGitHubUtilities(jobType types.JobType) *GitHubUtilities {
+	gitHubToken := os.Getenv("GIT_TOKEN")
+	if gitHubToken == "" {
+		log.Fatal("No Git Token passed", errors.New("Empty Git Token"))
+	}
 
+	client := github.NewClient(nil).WithAuthToken(gitHubToken)
 	return &GitHubUtilities{
-		RepoName: repoName,
+		RepoName: readMeFile[jobType].RepoName,
 		GitHub:   client,
 		JobType:  &jobType,
 	}
@@ -314,8 +333,8 @@ func (g *GitHubUtilities) IsNewCommit(
 	return SavedSHA != lastCommit, nil
 }
 
-func (g *GitHubUtilities) GetJobs(jobType types.JobType, jobsChannel chan string) {
-	var readmeFile string = readMeFile[jobType]
+func (g *GitHubUtilities) GetJobs(jobType types.JobType, jobsChannel chan<- string) {
+	var readmeFile string = readMeFile[jobType].ReadMeName
 	initial := ""
 	var prevJobTitle *string = &initial
 
