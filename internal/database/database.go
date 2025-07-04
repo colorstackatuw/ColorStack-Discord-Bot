@@ -66,6 +66,11 @@ func newDatabaseService() (ChannelsDB, error) {
 		return nil, errors.Wrap(err, "Couldn't connect to oracle database!")
 	}
 
+	// set up connection pool
+	conn.SetMaxOpenConns(10) // max number of open connections allowed
+	conn.SetMaxIdleConns(5) // max number of idle connections allowed
+	conn.SetConnMaxLifetime(time.Hour) // life cycle of a connection (an hour)
+
 	return &Database{conn: conn}, nil
 }
 

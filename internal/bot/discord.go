@@ -70,6 +70,7 @@ func main() {
 	<-stop
 
 	log.Info("Shutting down...")
+
 }
 
 /*
@@ -189,7 +190,9 @@ func onGuildRemove(s *discordgo.Session, event *discordgo.GuildDelete) {
 
 	// Connecting to oracle database
 	oracleClient := database.GetDatabaseInstance()
-	defer oracleClient.Close()
+	
+	// removed defer, because connection pools are not meant to close
+	// instead moved a defer function to the main method
 
 	var guildID string = event.Guild.ID
 	if err := oracleClient.DeleteServer(guildID); err != nil {
