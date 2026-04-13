@@ -1,5 +1,5 @@
 discord.py==2.3.2
-pytest==7.4.0
+pytest==9.0.3
 pygithub==2.2.0
 python-dotenv==1.0.1
 pytest-asyncio==0.23.4
